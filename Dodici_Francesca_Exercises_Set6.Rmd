@@ -1,0 +1,686 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.10.3
+  kernelspec:
+    display_name: R
+    language: R
+    name: ir
+---
+
+# R lab exercises - Set 6
+
+```{r}
+# ** Libraries and packages **
+    library(tidyverse)
+    library(lubridate) 
+    library("ggpubr")
+    #install.packages('GoFKernel')
+    library('GoFKernel')
+    #install.packages('dplyr')
+    library(dplyr)
+    library(scales)
+    library(reshape2)
+
+```
+
+## Exercise 1
+
+the number of particles emitted by a radioactive source during a fixed interval of time ($\Delta t = 10 s$) follows a Poisson distribution on the parameter $\mu$. The number of particles observed during consecutive time intervals is: 4, 1, 3, 1 and 3.
+
+(a) Suppose a uniform prior distribution for the parameter $\mu$
+- determine and draw the posterior distribution for $\mu$, given the data
+- evaluate mean, median and variance, both analytically and numerically in R
+
+(b) Suppose a Jeffrey's prior for the parameter $\mu$
+- determine and draw the posterior distribution for $\mu$, given the data
+- evaluate mean, median and variance, both analytically and numerically in R
+
+(c) Evaluate a $95 \%$ credibility interval for the results obtained with both priors. Compare the result with that obtained using a normal approximation for the posterior distribution, with the same mean and standard deviation.
+
+
+### Solution
+
+**(a)** To determine the posterior distribution $P(\mu|\{x_j\}M)$ for $\mu$ we can use Bayes theorem
+
+$$
+P(\mu|\{x_j\}M) \propto f(\{x_j\}|\mu M) \times g(\mu | M)
+$$
+
+where $g(\mu | M)$ is the Prior distribution, which we are assuming to be uniform  
+
+$$
+g(\mu | M) = 1 \forall \mu>0
+$$
+
+and $f(\{x_j\}|\mu M)$ is the Likelihood, which for multiple independent measurments of a Poisson process (such as the decay of a radiocative source) is:
+
+$$
+f(\{x_j\}|\mu M) =\prod_{j=1}^{n} f(x_j|\mu M)  \propto \mu^{\sum x_{j}} \times \mathrm{e}^{-(n \mu)}
+$$
+
+This is equivalent to a Gamma distribution function
+
+$$
+\operatorname{Gamma}(x | \alpha, \lambda)=k x^{\alpha-1} \mathrm{e}^{-\lambda x} 
+\qquad \text{with} \qquad k= \frac{\lambda^{\alpha}}{\Gamma(\alpha)}
+$$
+
+where $\alpha = \sum x_j + 1 = 13$ and $\lambda = n = 5$
+
+Given all these considerations, the posterior is:
+$$
+\begin{aligned}
+P(\mu| \{x_j\} M) & \propto f(\{x_j\}|\mu M) \times g(\mu | M) \\
+& \propto \mu^{\sum x_{j}} \times \mathrm{e}^{-(n \mu)} \\
+& \propto \operatorname{Gamma}(x | \alpha, \lambda) 
+\end{aligned}
+$$
+
+We can use the build-in R function `dgamma(mu, alpha, n)` to obtain the normalized Posterior distribution.
+
+```{r}
+alphaU <- 13
+n <- 5
+
+n.sample <- 3000
+mu <- seq(0,8, length.out = n.sample)
+
+PostU <- dgamma(mu, alphaU, n)
+
+dfU <- data.frame(mu=mu, 
+                   Post=PostU, 
+                   key = rep("Uniform_prior", length(mu))
+                   )
+
+#Plot
+options(repr.plot.width=6, repr.plot.height=4)
+
+ggplot(dfU, aes(x=mu, y=PostU, group=key)) +
+        geom_line(color= "springgreen3", size = 1) +
+        theme_bw(base_size=14)+
+        labs(title = "Posterior with uniform Prior", x = expression(mu), y = "pdf", color = " ", linetype= " ")
+```
+
+To compute the mean and variance we can use the analytical expressions for a Gamma distribution:
+$$
+E[\mu]=\frac{\alpha}{\lambda} \qquad \text{Var}[\mu]=\frac{\alpha}{\lambda^2}
+$$
+
+We can also compute them numerically as 
+
+$$
+E[\mu] = \int_{0}^{+\infty} x f(\mu) d\mu   \qquad \text{Var}[\mu] = E[\mu^2] - E[\mu]^2
+$$
+using the buit-in R function `integrate(funct, inf, sup)`
+
+The median can be computed using the quantile function with $50 \%$ of the total area `qgamma(0.5, alpha, n)`.
+
+```{r}
+# Analytical values
+an_meanU <- alphaU/n
+an_varU <- alphaU/(n*n)
+
+# Numerical values
+num_meanU <- integrate(function(x) {x*dgamma(x, alphaU, n)}, 0, Inf)
+E.x2U <- integrate(function(x) {x^2*dgamma(x, alphaU, n)}, 0, Inf)
+num_varU <- E.x2U$value - (num_meanU$value)^2
+medianU <- qgamma(0.5, alphaU, n)
+
+print(paste("Theoretical mean:", an_meanU, "and variance:", an_varU))
+print(paste("Numerical mean:", num_meanU$value, "and variance:", num_varU))
+print(paste("Median:", medianU))
+```
+
+**(b)** If we instead choose as $g(\mu | M)$ Jeffrey's Prior   
+
+$$
+g(\mu | M) \propto \frac{1}{\sqrt{\mu}} \qquad \forall \mu>0
+$$
+
+combining it with the Likelihood the Posterior is:
+
+$$
+\begin{aligned}
+P(\mu|\{x_j\}M) & \propto f(\{x_j\}|\mu M) \times g(\mu | M) \\
+& \propto \mu^{\sum x_{j}} \times \mathrm{e}^{-(n \mu)} \times \frac{1}{\sqrt{\mu}}\\
+& \propto \mu^{\sum x_{j} - \frac{1}{2}} \times \mathrm{e}^{-(n \mu)}\\
+& \propto \operatorname{Gamma}(x | \alpha', \lambda')
+\end{aligned}
+$$
+
+where $\alpha' = \sum x_j + 1\frac{1}{2} = 12.5$ and $\lambda' = n = 5$
+
+We can thus proceed as done with the uniform Prior.
+
+```{r}
+alphaJ<- 12.5
+
+PostJ <- dgamma(mu, alphaJ, n)
+
+dfJ <- data.frame(mu=mu, 
+                   Post=PostJ, 
+                   key = rep("Jeffrey_prior", length(mu))
+                   )
+
+#Plot
+options(repr.plot.width=6, repr.plot.height=4)
+
+ggplot(dfU, aes(x=mu, y=PostJ, group=key)) +
+        geom_line(color= "orangered1", size = 1) +
+        theme_bw(base_size=14)+
+        labs(title = "Posterior with Jeffrey Prior", x = expression(mu), y = "pdf", color = " ", linetype= " ")
+```
+
+```{r}
+# Analytical values
+an_meanJ <- alphaJ/n
+an_varJ <- alphaJ/(n*n)
+
+# Numerical values
+num_meanJ <- integrate(function(x) {x*dgamma(x, alphaJ, n)}, 0, Inf)
+E.x2J <- integrate(function(x) {x^2*dgamma(x, alphaJ, n)}, 0, Inf)
+num_varJ <- E.x2J$value - (num_meanJ$value)^2
+medianJ <- qgamma(0.5, alphaJ, n)
+
+print(paste("Theoretical mean:", an_meanJ, "and variance:", an_varJ))
+print(paste("Numerical mean:", num_meanJ$value, "and variance:", num_varJ))
+print(paste("Median:", medianJ))
+```
+
+**(c)** Now let's evaluate a $95 \%$ credibility interval for both priors and compare the results with that obtained using a normal approximation for the posterior distribution, with same mean and standard deviation. 
+
+We can compute the credibility interval using the quantile `qgamma(0.025, alpha, n)` to find the left extreme and `qgamma(0.975, alpha, n)` for the right one. 
+For the gaussian distribution we exploit the corresponding built-in R functions `dnorm(x, mean, sigma)` and `qnorm(area, mean, sigma)`.
+
+```{r}
+# Uniform prior -----------------------------------------------------------------------------------------------
+
+# Credibility interval
+mu_1U <- qgamma(0.025, alphaU, n)
+mu_2U <- qgamma(0.975, alphaU, n)
+
+# Gaussian approx
+PostUG <- dnorm(mu, an_meanU, sqrt(an_varU))
+mu_1UG <- qnorm(0.025, an_meanU, sqrt(an_varU))
+mu_2UG <- qnorm(0.975, an_meanU, sqrt(an_varU))
+
+print(paste("With a uniform Prior the 95 % credibility interval is: [", mu_1U, ",", mu_2U, "]"))
+print(paste("and in the gaussian approximation: [", mu_1UG, ",", mu_2UG, "]"))
+
+Gapprox <- data.frame(mu=mu, 
+                   Post=PostUG, 
+                   key = rep("Gauss_approx", length(mu))
+                   )
+dfU <- rbind(dfU, Gapprox)
+
+
+# Jeffrey prior -----------------------------------------------------------------------------------------------
+
+# Credibility interval
+mu_1J <- qgamma(0.025, alphaJ, n)
+mu_2J <- qgamma(0.975, alphaJ, n)
+
+# Gaussian approx
+PostJG <- dnorm(mu, an_meanJ, sqrt(an_varJ))
+mu_1JG <- qnorm(0.025, an_meanJ, sqrt(an_varJ))
+mu_2JG <- qnorm(0.975, an_meanJ, sqrt(an_varJ))
+
+print(paste("With Jeffrey's Prior the 95 % credibility interval is: [", mu_1J, ",", mu_2J, "]"))
+print(paste("and in the gaussian approximation: [", mu_1JG, ",", mu_2JG, "]"))
+
+Gjapprox <- data.frame(mu=mu, 
+                   Post=PostJG, 
+                   key = rep("Gauss_approx", length(mu))
+                   )
+dfJ <- rbind(dfJ, Gjapprox)
+```
+
+```{r}
+# Plot --------------------------------------------------------------------------------------------------------
+
+options(repr.plot.width=10, repr.plot.height=4)
+
+# Uniform Prior
+U_plot <- ggplot(dfU, aes(x=mu, y=Post, group=key)) +
+            geom_line(aes(color = key), size = 1) +
+
+            geom_vline(xintercept = an_meanU, linetype="longdash", color = "black", size=0.5)+
+            geom_text(aes(x=(an_meanU+0.2), label="mean", y=0.2), colour="black", angle=90) +
+
+            geom_vline(xintercept = mu_1U, linetype="dotted", color = "forestgreen", size=0.7)+
+            geom_text(aes(x=(mu_1U-0.5), label="μ1", y=0.2), colour="forestgreen") +
+            geom_vline(xintercept = mu_2U, linetype="dotted", color = "forestgreen", size=0.7)+
+            geom_text(aes(x=(mu_2U+0.4), label="μ2", y=0.2), colour="forestgreen") +
+            
+            geom_vline(xintercept = mu_1UG, linetype="dotted", color = "blue", size=0.7)+
+            geom_text(aes(x=(mu_1UG-0.6), label="μ1G", y=0.4), colour="blue") +
+            geom_vline(xintercept = mu_2UG, linetype="dotted", color = "blue", size=0.7)+
+            geom_text(aes(x=(mu_2UG+0.6), label="μ2G", y=0.4), colour="blue") +
+
+
+            theme_bw()+
+            scale_colour_manual(values = c("springgreen3", "royalblue4"),
+                                breaks = c("Uniform_prior", "Gauss_approx"),
+                                labels =c("Posterior", "Gaussian Approx.")
+                               )+
+            ylim(0,0.6)+
+            labs(title = "Using a uniform Prior", x = expression(mu), y = "pdf", color = " ")
+
+# Jeffrey's Prior
+J_plot <- ggplot(dfJ, aes(x=mu, y=Post, group=key)) +
+            geom_line(aes(color = key), size = 1) +
+
+            geom_vline(xintercept = an_meanJ, linetype="longdash", color = "black", size=0.5)+
+            geom_text(aes(x=(an_meanJ+0.2), label="mean", y=0.2), colour="black", angle=90) +
+
+            geom_vline(xintercept = mu_1J, linetype="dotted", color = "red", size=0.7)+
+            geom_text(aes(x=(mu_1J-0.5), label="μ1", y=0.2), colour="red") +
+            geom_vline(xintercept = mu_2J, linetype="dotted", color = "red", size=0.7)+
+            geom_text(aes(x=(mu_2J+0.4), label="μ2", y=0.2), colour="red") +
+
+            geom_vline(xintercept = mu_1JG, linetype="dotted", color = "blue", size=0.7)+
+            geom_text(aes(x=(mu_1JG-0.6), label="μ1G", y=0.4), colour="blue") +
+            geom_vline(xintercept = mu_2JG, linetype="dotted", color = "blue", size=0.7)+
+            geom_text(aes(x=(mu_2JG+0.6), label="μ2G", y=0.4), colour="blue") +
+
+            theme_bw()+
+            scale_colour_manual(values = c("orangered1", "royalblue4"),
+                                breaks = c("Jeffrey_prior", "Gauss_approx"),
+                                labels =c("Posterior", "Gaussian Approx."))+
+            ylim(0,0.6)+
+            labs(title = "Using Jeffrey's Prior", x = expression(mu), y = "pdf", color = " ")
+
+ggarrange(U_plot, J_plot, ncol = 2, nrow = 1)
+```
+
+## Exercise 2 
+
+Given the problem of the lightouse discussed last week, study the case in which both the position along the shore ($\alpha$) and the distance out at sea ($\beta$) are unknown.
+
+
+### Solution
+
+In this case where both the position along the shore $\alpha$ and the distance out at sea $\beta$ are to be determined, we are considering a two parameter distribution. 
+
+For the **Priors**, luckily, since the distribution of these two parameters are independent, we can consider the product of the Priors for the two coordinates: 
+$$
+P(\alpha, \beta) = P(\alpha)P(\beta)
+$$
+where $P(\alpha)$ is the Prior distribution of the position along the shore $\alpha$ and $P(\beta)$ the Prior of the distance out at sea $\beta$. Since we know nothing about the two parameters we can choose a uniform distribution for both variables:
+
+$$
+P(\alpha) = \frac{1}{\alpha_{\text{max}}-\alpha_{\text{min}}} \qquad \text{for } x \in [\alpha_{\text{min}}, \alpha_{\text{max}}]
+\qquad \qquad 
+P(\beta) = \frac{1}{\beta_{\text{max}}}\qquad\text{for } y \in [0 , \beta_{\text{max}}]
+$$
+
+For the **Likelihood** since the lighthouse emits at random angles we can assume a uniform Likelihood pdf on the azimuth angle $\theta_k$.
+
+$$
+P(\theta_k| \alpha,\beta) = \frac{1}{\pi} \qquad \text{for } \theta_k \in \left[-\frac{\pi}{2}, \frac{\pi}{2}\right] 
+$$
+
+The angle of emission $\theta_k$ is connected to $\alpha$ and $\beta$ by the relation
+$$
+x_k - \alpha = \beta \tan{\theta_k}
+$$
+
+we can thus perform a change of variable to obtain the pdf in terms of $x_k$ instead of $\theta_k$:
+
+$$
+\begin{aligned}
+P(x_k | \alpha, \beta) & = P(\theta_k | \alpha, \beta) \left| \frac{d \theta_k}{d x_k} \right|\\
+& = \frac{1}{\pi} \frac{\beta}{\beta^{2}+(x_k-\alpha)^{2}}
+\end{aligned}
+$$
+
+This pdf is a Cauchy distribution symmetric about the maximum $\alpha$ and with FWHM $2 \beta$.
+
+Since the recording of one signal does not influence what we can infer about the lighthouse's position in the following measures (i.e. the measures are independent) the Likelihood of the whole dataset $D$ is given by the product of the Likelihoods of each individual detection:
+
+$$
+P(D |\alpha, \beta) = \prod_k P(x_k | \alpha, \beta)
+$$
+
+To find the **Posterior** we can resort to Bayes'Theorem:
+
+$$
+P(\alpha, \beta|D) = \frac{1}{Z} P(D|\alpha, \beta) \times P(\alpha, \beta)
+$$
+where $Z$ is a normalization factor including all terms not depending on $\alpha$ amd $\beta$.
+
+Since all pdfs are uniform except for the Likelihood of $x_k$, the final Posterior will be a re-normalization of the Likelihood. To make the computation easier and eliminate the product we can take the natural logarithm:
+
+$$
+L = \ln P(\alpha, \beta | D) = \ln \left[ \frac{1}{Z} \prod_k P(x_k, | \alpha, \beta) \right]
+= \ln \left[ \frac{1}{Z} \prod_k\frac{1}{\pi} \frac{\beta}{\beta^{2}+(x_k-\alpha)^{2}} \right]
+= \text{const} - \sum_k \ln[\beta^2 + (x_k - \alpha)^2]
+$$
+
+In fact, the best parameters $(\alpha_0, \beta_0)$ are given by the maximum of the Posterior and, since the logarithm is a monotone increasing function, we can simply compute the max of $L$:
+
+$$
+\frac{dL}{d \alpha} \bigg\rvert_{\alpha_0} = 2\sum_k \frac{x_k - \alpha_0}{\beta^2 + (x_k - \alpha_0)^2} = 0 \qquad
+\frac{dL}{d \beta} \bigg\rvert_{\beta_0} = - 2\sum_k \frac{\beta_0}{\beta_0^2 + (x_k - \alpha)^2} = 0
+$$
+
+First of all, we have to generate a random dataset and the true values of $\alpha$ and $\beta$ to simulate the problem and the inference process.  
+
+```{r}
+set.seed(123587)
+
+# - Randomly set true position (alpha, beta) of lighthouse -------------------------------------------------
+a.min <- -6
+a.max <- +6
+b.max <- 5
+
+true_a <- runif(1, a.min, a.max)
+true_b <- runif(1, 0, b.max)
+#-----------------------------------------------------------------------------------------------------------
+
+# - Generate the observed data -----------------------------------------------------------------------------
+data.gen <- function(N, al, be) {
+        thetak <- runif(N, min = -pi/2, max = pi/2)
+        xk <- be*tan(thetak)+al        # inverse transform
+        return(xk)
+}
+
+coord <- data.gen(1000, true_a, true_b)
+#-----------------------------------------------------------------------------------------------------------
+
+# - To see the evolution of the posterior with increasing data ---------------------------------------------
+n.str <- readline("Enter data set dimension: ")
+n.plot <- as.numeric(unlist(strsplit(n.str, ",")))
+dt <- coord[1:n.plot] 
+
+#-----------------------------------------------------------------------------------------------------------
+
+# - Sampling grid for computing posterior -------------------------------------------------------------------
+n.sample <- 200 
+
+# alpha in [a.min, a.max]
+a.h <- (a.max - a.min)/n.sample
+
+# beta in [0, b.max]
+b.h <- b.max/n.sample
+
+alpha <- seq(from = a.min, by=a.h, length.out=n.sample+1)
+beta  <- seq(from=0, by=b.h, length.out=n.sample+1)
+#-----------------------------------------------------------------------------------------------------------
+
+```
+
+```{r}
+# - Define the Loglikelihood ---------------------------------------------------------------------------------
+p.log.like <- function (a, b, data) {
+    logL <- 0.0
+    for (x in data) {
+        logL <- logL + log((b/pi) / (b^2 + (x - a)^2))
+    }
+    return(logL)
+}
+#-----------------------------------------------------------------------------------------------------------
+
+# - Compute the normalized 2D Posterior --------------------------------------------------------------------
+p.post.star <- outer(alpha, beta, partial(p.log.like, data = dt))
+p.post.star <- p.post.star - max(p.post.star)
+p.post.norm <- exp(p.post.star)/(a.h*b.h*sum(exp(p.post.star)))
+#-----------------------------------------------------------------------------------------------------------
+
+# - Plot posterior ------------------------------------------------------------------------------
+options(repr.plot.width=6, repr.plot.height=6) 
+
+contour(alpha, beta, p.post.norm, las=1, labcex=0.5,
+        #xlim=c(a.min-0.1,a.max+0.1), ylim=c(-0.1,b.max+0.1),
+        nlevels = 6, lwd=2, cex.main= 1.5, cex.lab=1,
+        xlab=expression(alpha), ylab=expression(beta), 
+        main=expression(paste('Posterior p(', alpha, ', ', beta,' | x)')) )
+
+points(true_a, true_b, pch=19, col="red", lwd=3)   # true position
+
+legend("topleft", bty='n', "True position", col="red", pch=19, pt.cex=1.5, cex=1.5) 
+#-----------------------------------------------------------------------------------------------------------
+```
+
+We can see that as the size of the dataset increases (setting data set dimension = 5,10,20,50,100) the posterior becomes more peaked around its max and closer to the true value.
+
+We can also marginalize with respect to $\alpha$ and $\beta$ to find the best estimate.
+
+```{r}
+# - Marginalization ----------------------------------------------------------------------------------------
+marg_a <- apply(p.post.norm, 1, sum)
+marg_a_norm <- marg_a/(a.h*sum(marg_a))
+
+index.a.max <- which.max(marg_a_norm)
+best.a <- alpha[index.a.max]
+
+marg_b <- apply(p.post.norm, 2, sum)
+marg_b_norm <- marg_b/(b.h*sum(marg_b))
+
+index.b.max <- which.max(marg_b_norm)
+best.b <- beta[index.b.max]
+#-----------------------------------------------------------------------------------------------------------
+
+# - True position vs Best estimate -----------------------------------------------------------
+print(paste("The true position is: [", true_a, ",", true_b, "]"))
+print(paste("The best estimate is: [", best.a, ",", best.b, "]"))
+#-----------------------------------------------------------------------------------------------------------
+```
+
+```{r}
+df.alpha <- data.frame(alpha=alpha, Post=marg_a_norm)
+df.beta <- data.frame(beta=beta, Post=marg_b_norm)
+```
+
+```{r}
+# - Plot marginalized Posteriors -------------------------------------------------------------------------------------
+options(repr.plot.width=10, repr.plot.height=4)
+
+# Alpha
+a_plot <- ggplot(df.alpha, aes(x=alpha, y=Post)) +
+            geom_line(color = "hotpink1", size = 1) +
+
+            geom_vline(xintercept = best.a, linetype= "longdash", color = "hotpink4", size=0.5)+
+            geom_text(aes(x=(best.a-0.3), label="Max", y=0.2), colour="hotpink4", angle=90) +
+
+            geom_vline(xintercept = true_a, linetype="solid", color = "black", size=0.2)+
+            geom_text(aes(x=(true_a+0.3), label="True", y=0.2), colour="black", angle=90) +
+
+            theme_bw()+
+            xlim(-6,6)+
+            labs(title = expression(paste('Normalised posterior marginalized over ', alpha)),
+                 x = expression(alpha), 
+                 y = expression(paste('P(', alpha, '| D)')) )
+
+# Beta
+b_plot <- ggplot(df.beta, aes(x=beta, y=Post)) +
+            geom_line(color = "deepskyblue1", size = 1) +
+
+            geom_vline(xintercept = best.b, linetype= "longdash", color = "deepskyblue4", size=0.5)+
+            geom_text(aes(x=(best.b-0.2), label="Max", y=0.2), colour="deepskyblue4", angle=90) +
+
+            geom_vline(xintercept = true_b, linetype="solid", color = "black", size=0.2)+
+            geom_text(aes(x=(true_b+0.2), label="True", y=0.2), colour="black", angle=90) +
+
+            theme_bw()+
+            xlim(0,5)+
+            labs(title = expression(paste('Normalised posterior marginalized over ', beta)),
+                 x = expression(beta), 
+                 y = expression(paste('P(', beta, '| D)')) )
+
+ggarrange(a_plot, b_plot, ncol = 2, nrow = 1)
+```
+
+## Exercise 3
+
+Given the Signal over Background example discussed last week, analyze and discuss the following cases:
+
+**(a)** Vary the sampling resolution of used to generate the data, keeping the same sampling range
+
+    xdat <- seq(from=-7*w, to=7*w, by=0.5*w)
+    
+* Change the resolution $w = {0.1, 0.25, 1, 2, 3}$
+* Check the effect on the results
+
+**(b)** Change the ratio $A/B$ used to simulate the data (keeping both positive in accordance with the prior)
+* Check the effect on the results
+
+
+### Solution
+
+**(a)** Let's check the effect of varying the sampling resolution $w$
+
+```{r}
+# - Generative model ---------------------------------------------------------------------------------------
+signal <- Vectorize(function(x, a, b, x0, w, t) {
+    t * (a*exp(-(x-x0)^2/(2*w^2)) + b)
+})
+#-----------------------------------------------------------------------------------------------------------
+
+# - Define model parameters --------------------------------------------------------------------------------
+
+x0 <- 0                      # Signal peak
+w  <- 1                      # Signal width 
+r  <- c(0.1, 0.25, 1, 2, 3)  # VARY SAMPLING RESOLUTION KEEPING SAME RANGE
+A.true  <- 2                 # Signal amplitude
+B.true  <- 1                 # Background amplitude
+Delta.t <- 5                 # Exposure time
+#-----------------------------------------------------------------------------------------------------------
+
+# - Sampling grid for computing posterior-------------------------------------------------------------------
+alim    <- c(0.0, 4.0)
+blim    <- c(0.5, 1.5)
+Nsamp   <- 200
+uniGrid <- seq(from=1/(2*Nsamp),to=1-1/(2*Nsamp), by=1/Nsamp)
+delta_a <- diff(alim)/Nsamp
+delta_b <- diff(blim)/Nsamp
+a <- alim[1] + diff(alim)*uniGrid
+b <- blim[1] + diff(blim)*uniGrid
+#-----------------------------------------------------------------------------------------------------------
+
+# Log posterior --------------------------------------------------------------------------------------------
+log.post <- function(d, x, a, b, x0, w, t) {
+    if(a<0 || b <0) {return(-Inf)} # the effect of the prior
+    sum(dpois(d, lambda=signal(x, a, b, x0, w, t), log=TRUE))
+}
+#-----------------------------------------------------------------------------------------------------------
+```
+
+```{r}
+# - Plot results -------------------------------------------------------------------------------------------
+
+options(repr.plot.width=15, repr.plot.height=25)     #to set graph size
+par(mfrow= c(5,2), mar=c(5, 5, 4, 2))
+
+
+for (i in 1:length(r)){
+    
+    #Generate observed data 
+    xdat    <- seq(from=-7*w, to=7*w, by=r[i]*w)
+    s.true <- signal(xdat, A.true, B.true, x0, w, Delta.t)
+    ddat   <- rpois(length(s.true), s.true)
+    
+    xplot <- seq(from=min(xdat), to=max(xdat), by=0.05*w)
+    splot <- signal(xplot, A.true, B.true, x0, w, Delta.t)
+    xdat.off <- xdat-(r[i]/2)
+    
+    #Plot
+    plot(xplot, splot, xlab="x", ylab="Signal + Background counts",
+         xaxs='i', yaxs='i', type='l', lwd = 3, 
+         ylim=c(0, max(ddat, splot)+0.2),  
+         col = 'blue4', main=parse(text = paste0('r == ', r[i])),
+         cex.main=2.5, cex.lab=1.5, las=1) 
+    lines(xdat.off, ddat, type='s', col='firebrick3', xlab="", ylab="", lwd = 3)
+    
+    # Compute log unnormalized posterior, z = ln P*(a,b|D), on a regular grid
+    z <- matrix(data=NA, nrow=length(a), ncol=length(b))
+    fill_matrix <- function(a,b){ log.post(ddat, xdat, a, b, x0, w, Delta.t) }
+
+    z <- outer(a, b, Vectorize(fill_matrix))
+
+    z <- z - max(z)   # set maximum to zero
+    norm <- sum(exp(z))
+    norm_z <- exp(z)/(delta_a*delta_b*norm)
+
+    # Plot normalized 2D posterior as contours
+    contour(a, b, norm_z, nlevels = 5, labcex = 0.5, 
+            lwd = 2, las=1, cex.main= 2.5, cex.lab=2,
+            xlim=c(min(a)-0.1, max(a)+0.1), ylim=c(min(b)-0.1,max(b)+0.1),
+            xlab="Amplitude , A", ylab="Background , B",
+            main=parse(text = paste0('r == ', r[i]))
+           )
+    abline(v=2,h=1,col="grey")
+    
+}
+```
+
+We can see, by looking at the 2D Posterior, that a smaller resolution (i.e. smaller binning) results in a Posterior more peaked around the maximum but not necessarily closer to the true value. This means that more bins does not necessarily mean better results.
+
+**(b)**  Let's check the effect of varying the $A/B$ ratio for example $A/B = {0.2, 0.5, 1, 2, 3}$. The easiest way to do this is fix B to 1 and choose $A = {0.2, 0.5, 1, 2, 3}$.
+
+```{r}
+# - Define new model parameters ----------------------------------------------------------------------------
+
+x0 <- 0                      # Signal peak
+w  <- 1                      # Signal width 
+A.true  <- c(0.2,0.5,1,2,3)  # Signal amplitude
+B.true  <- 1                 # Background amplitude
+Delta.t <- 5                 # Exposure time
+#-----------------------------------------------------------------------------------------------------------
+```
+
+```{r}
+# - Plot results -------------------------------------------------------------------------------------------
+options(repr.plot.width=15, repr.plot.height=25)  
+par(mfrow= c(5,2), mar=c(5, 5, 4, 2))
+  
+#Generate observed data      
+for (i in 1:length(A.true)){
+    xdat   <- seq(from=-7*w, to=7*w, by=0.5*w)
+    s.true <- signal(xdat, A.true[i], B.true, x0, w, Delta.t)
+    ddat   <- rpois(length(s.true), s.true)
+    
+    xplot <- seq(from=min(xdat), to=max(xdat), by=0.05*w)
+    splot <- signal(xplot, A.true[i], B.true, x0, w, Delta.t)
+    xdat.off <- xdat-0.25
+    
+    #Plot    
+    plot(xplot, splot, xlab="x", ylab="Signal + Background counts",
+         xaxs='i', yaxs='i', type='l', lwd = 3, 
+         xlim=range(xplot), ylim=c(0, max(ddat, splot)+0.2),
+         col = 'blue4', main=parse(text = paste0('A/B == ', A.true[i])),
+         cex.main=2.5, cex.lab=1.5, las=1) 
+    lines(xdat.off, ddat, type='s', col='firebrick3', xlab="", ylab="", lwd=3)
+
+    # Compute log unnormalized posterior , z = ln P*(a,b|D), on a regular grid
+    z <- matrix(data=NA, nrow=length(a), ncol=length(b))
+    fill_matrix <- function(a,b){ log.post(ddat, xdat, a, b, x0, w, Delta.t) }
+
+    z <- outer(a, b, Vectorize(fill_matrix))
+
+    z <- z - max(z)   # set maximum to zero
+    norm <- sum(exp(z))
+    norm_z <- exp(z)/(delta_a*delta_b*norm)
+
+    # Plot normalized 2D posterior as contours
+    contour(a, b, norm_z, nlevels = 5, labcex = 0.8, 
+            lwd = 2, las=1, cex.main= 2.5, cex.lab=2,
+            xlim=c(min(a)-0.1, max(a)+0.1), ylim=c(min(b)-0.1,max(b)+0.1),
+            xlab="Amplitude , A", ylab="Background , B",
+            main=parse(text = paste0('A/B == ', A.true[i]))
+           )
+    abline(v=A.true[i],h=B.true,col="grey")
+    
+}
+```
+
+We can see that as the signal to noise ratio becomes bigger, the histogram of the simulated data (of course) becomes closer and closer to the shape of the signal peak. This also means that the Posterior becomes more and more centered around the true value as the noise has a smaller impact on the inference process.
+
+```{r}
+
+```

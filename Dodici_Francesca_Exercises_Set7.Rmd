@@ -1,0 +1,1046 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.10.3
+  kernelspec:
+    display_name: R
+    language: R
+    name: ir
+---
+
+# R lab exercises - Set 7
+
+```{r}
+# ** Libraries and packages **
+    library(tidyverse)
+    library(lubridate) 
+    library("ggpubr")
+    #install.packages('GoFKernel')
+    library('GoFKernel')
+    #install.packages('dplyr')
+    library(dplyr)
+    library(scales)
+    library(reshape2)
+```
+
+## Exercise 1
+
+A well established and diffused method for detecting a disease in blood fails to detect the presence of disease in $15\%$ of the patients that actually have the disease.
+
+A young UniPD startUp has developed an innovative method of screening. During the qualification phase, a random sample of $n = 75$ patients known to have the disease is screened using the new method.
+
+**(a)** What is the probability distribution of $y$, the number of times the new method fails to detect the disease?
+
+**(b)** On the $n = 75$ patients sample, the new method fails to detect the disease in $y = 6$ cases. What is the frequentist estimator of the failure probability of the new method?
+
+**(c)** Setup a bayesian computation of the posterior probability, assuming a beta distribution with mean value $0.15$ and standard deviation $0.14$. Plot the posterior distribution for y, and mark on the plot the mean value and variance.
+
+**(d)** Perform a test of hypothesis assuming that if the probability of failing to the detect the disesease in ill patients is greater or equal than $15\%$, the new test is no better that the traditional method.
+Test the sample at a $5\%$ level of significance in the Bayesian way.
+
+**(e)** Perform the same hypothesis test in the classical frequentist way.
+
+
+### Solution
+
+**(a)** In this process there are only two possible outcomes: the new screening method either fails or succeeds in detecting the disease. We are thus considering a Bernoulli process and the probability distribution of $y$ (the number of times the new method fails to detect the disease) is the Binomial:
+
+$$
+\text{Binom}(y|n,p) = {n\choose y} p^y(1-p)^{n-y}
+$$  
+
+where $n$ is the number of trials and $p$ is the probability of failing to detect the disease.
+
+**(b)** With $n = 75$ and $y = 6$ an unbiased frequentist estimator for the Binomial distribution is
+
+$$
+p = \frac{y}{n} = \frac{6}{75} = \frac{2}{25}
+$$
+
+**(c)**  If the mean $\mu$ and standard deviation $\sigma$ of the chosen $\text{Beta}(a, b)$ prior are:
+
+$$\mu = \frac{a}{a + b} = 0.15 \qquad \qquad 
+\sigma^2 = \frac{a b}{(a + b)^2(a + b + 1)} = 0.14 $$
+
+we can invert this expression and find:
+$$
+\Longrightarrow a = \mu \left( \frac{\mu (1- \mu)}{\sigma^2} -1 \right) \approx 0.826 \qquad \qquad
+b = \left( \frac{\mu (1- \mu)}{\sigma^2} -1 \right)(1 - \mu) \approx 4.679$$ 
+
+Then, since the Beta distribution is the conjugate prior for the Binomial, the Posterior will still be a $\text{Beta}(\bar{a},\bar{b})$ distribution with 
+
+$$\bar{a}= a + y = 0.826 + 6 \approx 6.826 \quad \text{ and } \quad \bar{b}= b + n - y = 4.679 + 75 - 6 \approx 73.68$$
+
+and with mean and variance:
+
+$$\bar{\mu} = \frac{\bar{a}}{\bar{a} + \bar{b}} \approx 0.085 \qquad \qquad 
+\bar{\text{Var}} = \frac{\bar{a} \bar{b}}{(\bar{a} + \bar{b})^2(\bar{a} + \bar{b} + 1)} \approx 0.0009 $$
+
+(Calculations below)
+
+```{r}
+y <- 6
+n <- 75
+
+# Prior parameters
+m1 <- 0.15
+s1 <- 0.14
+
+a1 <- m1*((m1*(1-m1)/s1**2)-1)
+b1 <- (1-m1)*((m1*(1-m1)/s1**2)-1)
+
+# Posterior parameters
+a2 <- a1 + y
+b2 <- b1 + n - y
+
+m2 <- a2/(a2+b2)
+s2 <- sqrt((a2*b2)/((a2+b2+1)*(a2+b2)**2))
+
+cat('Prior: \n-------------------------------\n')
+cat('a: ', a1)
+cat('\t b: ', b1, '\n')
+
+cat('\n Posterior: \n---------------------------------------------------------------------------------\n')
+cat('a: ', a2)
+cat('\t b: ', b2)
+cat('\t Mean: ', m2)
+cat('\t Variance: ', s2**2)
+```
+
+We can also plot these results:
+
+```{r}
+samp <- 500
+p0 <- seq(0, 1, by=1/samp)
+
+prior <- dbeta(p0, a1, b1)
+posterior <- dbeta(p0, a2, b2)
+
+df_plot <- data.frame(x = rep(p0,2), 
+                      P = c(prior, posterior), 
+                      Key = c(rep("Prior", length(p0)), rep("Posterior", length(p0)))
+                     )
+
+options(repr.plot.width=7, repr.plot.height=4)
+
+ggplot(df_plot, aes(x=x, y=P, group = Key)) +
+            geom_line(aes(color = Key), size = 1) +
+            theme_bw(base_size=14)+
+            labs(title = "Prior and Posterior distributions", x = "p0", y = "pdf", color = " ")+
+            ylim(0,15)+
+            xlim(0,0.25)+
+            
+            #Prior
+            #geom_segment(aes(x = m1, y = 0, xend = m1, yend = 3), linetype="longdash", color = "aquamarine4", size=0.8) +
+            #geom_text(aes(x=(m1+0.1), label="Prior Mean", y=3), colour="aquamarine4")+
+
+            #geom_vline(xintercept = (m1-s1**2), linetype="dotted", color = "aquamarine3", size=0.8)+
+            #geom_vline(xintercept = (m1+s1**2), linetype="dotted", color = "aquamarine3", size=0.8)+
+
+            #Posterior
+            geom_segment(aes(x = m2, y = 0, xend = m2, yend = 13), linetype="longdash", color = "firebrick4", size=0.8) +
+            geom_segment(aes(x = 0.15, y = 12.5, xend = 0.17, yend = 12.5),
+                         linetype="longdash", color = "firebrick4", size=0.8) +   
+            geom_text(aes(x=(m2+0.12), label="Posterior Mean", y=12.5), colour="black")+
+
+            geom_vline(xintercept = (m2-s2**2), linetype="dotted", color = "firebrick3", size=0.8)+
+            geom_vline(xintercept = (m2+s2**2), linetype="dotted", color = "firebrick3", size=0.8)+
+            geom_segment(aes(x = 0.15, y = 11.5, xend = 0.17, yend = 11.5),
+                         linetype="dotted", color = "firebrick3", size=0.8) +
+            geom_text(aes(x=(m2+0.12), label="Posterior Var", y=11.5), colour="black")
+
+
+```
+
+**(d)** If p is the probability of failing to the detect the disesease in ill patients, the null hypothesis is 
+$$
+H_0: \qquad p < 0.15
+$$
+
+and the alternative hypothesis:
+$$
+H_1: \qquad p \geq 0.15
+$$
+
+To test $H_0: p < p_0$ vs $H_1: p \geq p_0$ at a level of significance $\alpha = 5 \%$ we integrate the posterior ($\text{Beta}(\bar{a},\bar{b})$) over the region of interest:
+
+$$
+P(H_0: p < 0.15| y=6) = \int_0^{0.15} \frac{\Gamma(\bar{a}+\bar{b})}{\Gamma(\bar{a})\Gamma(\bar{b})} p^{\bar{a}-1}(1-p)^{\bar{b}-1} dp
+$$
+
+
+
+```{r}
+p_H0 <- integrate(function(x) {x*dbeta(x, a2, b2)}, 0, 0.15)
+
+cat('The posterior probability of the null hypothesis is:', p_H0$value*100, '% \n')
+```
+
+Since the result $7.95 \%$ is higher than $\alpha = 5 \%$ we cannot reject the null hypothesis at this level of significance.
+
+
+**(e)** In the frequentist approach we still set the same null and alternative hypothesis. The null distribution of the test statistic is:
+
+    Binom(y|n = 75, p=0.15)
+
+Then we have to calculate the p-value $1 - F(y=6)$ where $F(y)$ is the $cdf$. If $\text{p-value} < \alpha$ then the test statistic lies in the rejection region and we cannot accept the null hypothesis at this level of significance. 
+
+We can also use the built-in function `binom.test()` to perform the frequentist hypothesis test. 
+
+```{r}
+p.value <- 1- pbinom(y,n,0.15)
+
+cat('The p-value is:', p.value,'\n')
+
+exact.pval <- binom.test(6, 75, 0.15, alternative = "greater")$p.value
+
+cat('Using the built-in punction for the exact binomial test the p-value is:', exact.pval)
+```
+
+Since this value is bigger than $\alpha = 0.05$ we cannot reject the null hypothesis. 
+
+We can also visualize the hypothesis test through the following plot:
+
+```{r}
+ys <- seq(0,75)
+bars <- 1 - pbinom(ys, 75, 0.15)
+alpha <- 0.05
+
+df.freq <- data.frame(x = ys, P = bars)
+
+# Plot
+options(repr.plot.width=7, repr.plot.height=5)
+
+ggplot(data=df.freq, aes(x=x, y=P, fill=factor(ifelse(x == '6', 'highligthed','normal')))
+      )+ 
+            geom_bar(stat="identity", width=0.8, color = 'coral4', size = 0.8, alpha = 0.8)+
+            geom_hline(yintercept = alpha, linetype="twodash", color = "blue4", size=0.8)+
+
+            geom_text(aes(x=19, label="alpha", y=0.09), colour="blue4")+
+
+            scale_fill_manual(name = " ", values=c("deepskyblue1","lightpink1"))+
+            theme_minimal(base_size=14)+
+            theme(legend.position = "none")+
+            labs(title = "One-side hypothesis test - frequentist approach", x = "y", y = "1 - F(x)")+
+            xlim(0,20)
+
+```
+
+We can see that $y=6$ lies in the acceptance region, thus we cannot reject the null hypothesis at this level of significance (as found in the Bayesian test).
+
+<!-- #region -->
+## Exercise 2 
+
+Ladislaus Josephovich Bortkiewicz was a Russian economist and statistician. He noted that the Poisson distribution can be very useful in applied statistics when describing low-frequency events in a large population. In a famous example he showed that the number of deaths by horse kick among the Prussian army follows the Poisson distribution.
+
+Considering the following to sets of observations taken over a fixed large time interval in two different corps:
+
+| $y$ death soldiers |  0  |  1  |  2  |  3  |  4  | ≥ 5 |
+|--------------------|:---:|:---:|:---:|:---:|:---:|:---:|
+| $n_1$ observations | 109 | 65  | 22  | 3   | 1   | 0   |
+| $n_2$ obseravtions | 144 | 91  | 32  | 11  | 2   | 0   |
+
+
+**(a)** Assuming a uniform prior, compute and plot the posterior distribution for $\lambda$, the death rate over the measurement time. Determine the posterior mean, median and variance, and compute the $95 \%$ credibility interval.
+
+**(b)** Assuming now a Jeffreys' prior,
+
+$$ g(\lambda) \propto 1/\sqrt{\lambda} \qquad \text{with} \lambda > 0$$
+
+compute and plot the posterior distribution for $\lambda$, the death rate over the measurement time. Determine the posterior mean, median and variance, and compute the $95 \%$ credibility interval.
+<!-- #endregion -->
+
+### Solution
+
+**(a)** To determine the posterior distribution $P(\lambda|\{y_j\})$ for $\lambda$ we can use Bayes theorem
+
+$$
+P(\lambda|\{y_j\}) \propto f(\{y_j\}|\lambda) \times g(\lambda)
+$$
+
+where $g(\lambda)$ is the Prior distribution, which we are assuming to be uniform  
+
+$$
+g(\lambda) = 1 \qquad \forall \lambda>0
+$$
+
+and $f(\{y_j\}|\lambda)$ is the Likelihood, which for multiple independent measurments of a Poisson process like in this case is:
+
+$$
+f(\{y_j\}|\lambda) =\prod_{j=1}^{n} f(y_j|\lambda)  \propto \lambda^{\sum y_{j}} \times \mathrm{e}^{-(n \lambda)}
+$$
+
+This is equivalent to a Gamma distribution function
+
+$$
+\operatorname{Gamma}(y | \alpha, N)=k y^{\alpha-1} \mathrm{e}^{-n y} 
+\qquad \text{with} \qquad k= \frac{n^{\alpha}}{\Gamma(\alpha)}
+$$
+
+where $\alpha = \sum y_j + 1$ and $n$ is the number of trials.
+
+Given all these considerations, the posterior is:
+$$
+\begin{aligned}
+P(\lambda| \{y_j\}) & \propto f(\{y_j\}|\lambda) \times g(\lambda) \\
+& \propto \lambda^{\sum y_{j}} \times \mathrm{e}^{-(n \lambda)} \\
+& \propto \operatorname{Gamma}(y | \alpha, n) 
+\end{aligned}
+$$
+
+We can use the build-in R function `dgamma(mu, alpha, n)` to obtain the normalized Posterior distribution for the two datasets.
+
+```{r}
+# - n1 observations ---------------------------------------------------------------------------------------------------
+alpha1 <- 1 + (65 + 2*22 + 3*3 + 4)
+n1 <- 109+65+22+3+1
+
+n.sample <- 3000
+lamb <- seq(0,2, length.out = n.sample)
+
+PostU1 <- dgamma(lamb, alpha1, n1)
+
+df1 <- data.frame(lambda = lamb, 
+                  Post = PostU1, 
+                  key = rep("Set1", length(lamb))
+                  )
+
+# - n2 observations ---------------------------------------------------------------------------------------------------
+alpha2 <- 1 + (91 + 2*32 + 3*11 + 4*2)
+n2 <- 144+91+32+11+2
+
+PostU2 <- dgamma(lamb, alpha2, n2)
+
+df2 <- data.frame(lambda = lamb, 
+                  Post = PostU2, 
+                  key = rep("Set2", length(lamb))
+                  )
+
+dfUnif <- rbind(df1, df2)
+```
+
+Now we can compute the posterior mean, median and variance, and compute the $95 \%$  credibility interval. We know that for a `Gamma($\alpha$, $N$)` distribution the analytical expression of the mean and variance are:
+
+$$
+E[\lambda|y] = \frac{\alpha}{N} \qquad \text{Var}[\lambda|y] = \frac{\alpha}{N^2}
+$$
+
+```{r}
+# - n1 observations ---------------------------------------------------------------------------------------------------
+mean1 <- alpha1/n1
+var1 <- alpha1/(n1*n1)
+median1 <- qgamma(0.5, alpha1, n1)
+
+min_CI1 <- qgamma(0.025, alpha1, n1)
+max_CI1 <- qgamma(0.975, alpha1, n1)
+
+cat("- Set 1 -----------------")
+cat("Mean:", mean1, '\n')
+cat("Variance:", var1, '\n')
+cat("Median:", median1, '\n')
+cat("95% C.I.: [", min_CI1, ',', max_CI1,']\n')
+
+# - n2 observations ---------------------------------------------------------------------------------------------------
+mean2 <- alpha2/n2
+var2 <- alpha2/(n2*n2)
+median2 <- qgamma(0.5, alpha2, n2)
+
+min_CI2 <- qgamma(0.025, alpha2, n2)
+max_CI2 <- qgamma(0.975, alpha2, n2)
+
+cat("\n - Set 2 -----------------")
+cat("Mean:", mean2, '\n')
+cat("Variance:", var2, '\n')
+cat("Median:", median2, '\n')
+cat("95% C.I.: [", min_CI2, ',', max_CI2,']\n')
+```
+
+```{r}
+# - Plot ---------------------------------------------------------------------------------------------------
+options(repr.plot.width=10, repr.plot.height=5)
+
+plot1 <- ggplot(df1, aes(x=lambda, y=Post)) +
+            geom_line(color = 'coral2', size = 1) +
+            geom_segment(aes(x = mean1, y = 0, xend = mean1, yend = 7), linetype="longdash", color = "red4", size=0.8)+
+            geom_vline(xintercept =  min_CI1, linetype="dotted", color = "red2", size=0.8)+
+            geom_vline(xintercept = max_CI1, linetype="dotted", color = "red2", size=0.8)+
+            geom_ribbon(data=subset(df1 ,lambda>0 & lambda<min_CI1),aes(ymax=Post),ymin=0,fill="red",colour=NA,alpha=0.6)+
+            geom_ribbon(data=subset(df1 ,lambda>max_CI1 & lambda<2),aes(ymax=Post),ymin=0,fill="red",colour=NA,alpha=0.6)+
+            
+            #Legend
+            geom_segment(aes(x = 1, y = 6, xend = 1.2, yend = 6), linetype="longdash", color = "red4", size=0.8)+
+            geom_text(aes(x=1.35, label="Mean", y=6), colour="black") +
+            geom_segment(aes(x = 1, y = 5, xend = 1.2, yend = 5), linetype="dotted", color = "red2", size=0.8)+
+            geom_text(aes(x=1.4, label="95 % C.I.", y=5), colour="black") +
+
+        theme_bw(base_size=14)+
+        labs(title = "Set1", x = expression(lambda), y = expression(paste('P(', lambda, '| D)')))+
+        ylim(0,8)+xlim(0,2)
+
+plot2 <- ggplot(df2, aes(x=lambda, y=Post)) +
+            geom_line(color = 'cyan2', size = 1) +
+
+            geom_segment(aes(x = mean2, y = 0, xend = mean2, yend = 8), linetype="longdash", color = "blue4", size=0.8)+            
+            geom_vline(xintercept =  min_CI2, linetype="dotted", color = "blue2", size=0.8)+
+            geom_vline(xintercept = max_CI2, linetype="dotted", color = "blue2", size=0.8)+
+            geom_ribbon(data=subset(df2,lambda>0 & lambda<min_CI2),aes(ymax=Post),ymin=0,fill="blue",colour=NA,alpha=0.5)+
+            geom_ribbon(data=subset(df2,lambda>max_CI2 & lambda<2),aes(ymax=Post),ymin=0,fill="blue",colour=NA,alpha=0.5)+
+
+            #Legend
+            geom_segment(aes(x = 1, y = 6, xend = 1.2, yend = 6), linetype="longdash", color = "blue4", size=0.8)+
+            geom_text(aes(x=1.35, label="Mean", y=6), colour="black") +
+            geom_segment(aes(x = 1, y = 5, xend = 1.2, yend = 5), linetype="dotted", color = "blue2", size=0.8)+
+            geom_text(aes(x=1.4, label="95 % C.I.", y=5), colour="black") +
+
+        theme_bw(base_size=14)+
+        labs(title = "Set2", x = expression(lambda), y = expression(paste('P(', lambda, '| D)')))+
+        ylim(0,8)+xlim(0,2)
+
+tgrob <- text_grob('Posterior distributions using Uniform Prior',size = 18)
+plot0 <- as_ggplot(tgrob)
+
+ggarrange(plot0, NULL ,plot1, plot2, ncol = 2,nrow = 2,heights = c(1,5))
+```
+
+**(b)** If we instead choose as $g(\lambda)$ Jeffrey's Prior   
+
+$$
+g(\lambda) \propto \frac{1}{\sqrt{\lambda}} \qquad \forall \lambda>0
+$$
+
+combining it with the Likelihood the Posterior is:
+
+$$
+\begin{aligned}
+P(\lambda|\{y_j\}) & \propto f(\{y_j\}|\lambda) \times g(\lambda) \\
+& \propto \lambda^{\sum y_{j}} \times \mathrm{e}^{-(n \lambda)} \times \frac{1}{\sqrt{\lambda}}\\
+& \propto \lambda^{\sum y_{j} - \frac{1}{2}} \times \mathrm{e}^{-(n \lambda)}\\
+& \propto \operatorname{Gamma}(y | \alpha', n')
+\end{aligned}
+$$
+
+where $\alpha' = \sum y_j + 1\frac{1}{2}$ and $n'$ is the number of trials.
+
+We can thus proceed as done with the uniform Prior.
+
+```{r}
+# - n1 observations ---------------------------------------------------------------------------------------------------
+j.alpha1 <- 1/2 + (65 + 2*22 + 3*3 + 4)
+
+n.sample <- 3000
+lamb <- seq(0,2, length.out = n.sample)
+
+PostJ1 <- dgamma(lamb, j.alpha1, n1)
+
+dfj1 <- data.frame(lambda = lamb, 
+                  Post = PostJ1, 
+                  key = rep("Set1", length(lamb))
+                  )
+
+# - n2 observations ---------------------------------------------------------------------------------------------------
+j.alpha2 <- 1/2 + (91 + 2*32 + 3*11 + 4*2)
+
+PostJ2 <- dgamma(lamb, j.alpha2, n2)
+
+dfj2 <- data.frame(lambda = lamb, 
+                  Post = PostJ2, 
+                  key = rep("Set2", length(lamb))
+                  )
+
+```
+
+```{r}
+# - n1 observations ---------------------------------------------------------------------------------------------------
+meanj1 <- j.alpha1/n1
+varj1 <- j.alpha1/(n1*n1)
+medianj1 <- qgamma(0.5, j.alpha1, n1)
+
+j.min_CI1 <- qgamma(0.025, j.alpha1, n1)
+j.max_CI1 <- qgamma(0.975, j.alpha1, n1)
+
+cat("- Set 1 -----------------")
+cat("Mean:", meanj1, '\n')
+cat("Variance:", varj1, '\n')
+cat("Median:", medianj1, '\n')
+cat("95% C.I.: [", j.min_CI1, ',', j.max_CI1,']\n')
+
+# - n2 observations ---------------------------------------------------------------------------------------------------
+meanj2 <- j.alpha2/n2
+varj2 <- j.alpha2/(n2*n2)
+medianj2 <- qgamma(0.5, j.alpha2, n2)
+
+j.min_CI2 <- qgamma(0.025, j.alpha2, n2)
+j.max_CI2 <- qgamma(0.975, j.alpha2, n2)
+
+cat("\n - Set 2 -----------------")
+cat("Mean:", meanj2, '\n')
+cat("Variance:", varj2, '\n')
+cat("Median:", medianj2, '\n')
+cat("95% C.I.: [", j.min_CI2, ',', j.max_CI2,']\n')
+```
+
+```{r}
+# - Plot ---------------------------------------------------------------------------------------------------
+options(repr.plot.width=10, repr.plot.height=5)
+
+plotj1 <- ggplot(dfj1, aes(x=lambda, y=Post)) +
+            geom_line(color = 'mediumorchid2', size = 1) +
+            geom_segment(aes(x = meanj1, y = 0, xend = meanj1, yend = 7), linetype="longdash", color = "purple4", size=0.8)+
+            geom_vline(xintercept = j.min_CI1, linetype="dotted", color = "purple2", size=0.8)+
+            geom_vline(xintercept = j.max_CI1, linetype="dotted", color = "purple2", size=0.8)+
+            geom_ribbon(data=subset(dfj1 ,lambda>0 & lambda<j.min_CI1),aes(ymax=Post),ymin=0,fill="purple",colour=NA,alpha=0.6)+
+            geom_ribbon(data=subset(dfj1 ,lambda>max_CI1 & lambda<2),aes(ymax=Post),ymin=0,fill="purple",colour=NA,alpha=0.6)+
+            
+            #Legend
+            geom_segment(aes(x = 1, y = 6, xend = 1.2, yend = 6), linetype="longdash", color = "purple4", size=0.8)+
+            geom_text(aes(x=1.35, label="Mean", y=6), colour="black") +
+            geom_segment(aes(x = 1, y = 5, xend = 1.2, yend = 5), linetype="dotted", color = "purple2", size=0.8)+
+            geom_text(aes(x=1.4, label="95 % C.I.", y=5), colour="black") +
+
+        theme_bw(base_size=14)+
+        labs(title = "Set1", x = expression(lambda), y = expression(paste('P(', lambda, '| D)')))+
+        ylim(0,8)+xlim(0,2)
+
+plotj2 <- ggplot(dfj2, aes(x=lambda, y=Post)) +
+            geom_line(color = 'springgreen2', size = 1) +
+
+            geom_segment(aes(x = meanj2, y = 0, xend = meanj2, yend = 8), linetype="longdash", color = "green4", size=0.8)+            
+            geom_vline(xintercept = j.min_CI2, linetype="dotted", color = "green2", size=0.8)+
+            geom_vline(xintercept = j.max_CI2, linetype="dotted", color = "green2", size=0.8)+
+            geom_ribbon(data=subset(dfj2,lambda>0 & lambda<j.min_CI2),aes(ymax=Post),ymin=0,fill="green",colour=NA,alpha=0.4)+
+            geom_ribbon(data=subset(dfj2,lambda>j.max_CI2 & lambda<2),aes(ymax=Post),ymin=0,fill="green",colour=NA,alpha=0.4)+
+
+            #Legend
+            geom_segment(aes(x = 1, y = 6, xend = 1.2, yend = 6), linetype="longdash", color = "green4", size=0.8)+
+            geom_text(aes(x=1.35, label="Mean", y=6), colour="black") +
+            geom_segment(aes(x = 1, y = 5, xend = 1.2, yend = 5), linetype="dotted", color = "green2", size=0.8)+
+            geom_text(aes(x=1.4, label="95 % C.I.", y=5), colour="black") +
+
+        theme_bw(base_size=14)+
+        labs(title = "Set2", x = expression(lambda), y = expression(paste('P(', lambda, '| D)')))+
+        ylim(0,8)+xlim(0,2)
+
+tgrob <- text_grob('Posterior distributions using Jeffrey\'s Prior',size = 18)
+plot0 <- as_ggplot(tgrob)
+
+ggarrange(plot0, NULL ,plotj1, plotj2, ncol = 2,nrow = 2,heights = c(1,5))
+```
+
+The results are not very influenced by the choice of the Prior distribution.
+
+
+## Exercise 3
+
+* A study on water quality of streams, a high level of bacter X was defined as a level greater than 100 per 100 mL of stream water. $n = 116$ samples were taken from streams having a high environmental impact on pandas. Out of these, $y = 11$ had a high bacter X level.
+
+* Indicating with $p$ the probability that a sample of water taken from the stream has a high bacter X level,
+
+**(a)** Find the frequentist estimator for $p$
+
+**(b)** Using a Beta(1; 10) prior for $p$, calculate and posterior distribution $P(p|y)$
+
+**(c)** Find the bayesian estimator for p, the posterior mean and variance, and a $95 \%$ credible interval
+
+**(d)** Test the hypotesis
+$$H_0 : p = 0.1 \qquad \text{versus} \qquad H_1: p \neq 0.1$$
+at $5 \%$ level of significance with both the frequentist and bayesian approach
+
+* A new measurement, performed one month later on $n = 165$ water samples, gives $y = 9$ high bacter X level
+
+**(e)** Find the frequentist estimator for $p$
+
+**(f)** Find a bayesian estimator for $p$, assuming both a Beta(1; 10) prior for $p$, and assuming the posterior probability of the older measurement as the prior for the new one.
+
+**(g)** Find the bayesian estimator for p, the posterior mean and variance, and a $95 \%$ credible interval
+
+**(h)** Test the hypotesis
+$$H_0 : p = 0.1 \qquad \text{versus} \qquad H_1: p \neq 0.1$$
+at $5 \%$ level of significance with both the frequentist and bayesian approach.
+
+
+### Solution
+
+**(a)** Since the result of the test on the quality of the water can only have two possible results (high or low) we are considering a Bernoulli process and the probability distribution of $y$ (the number of times that a sample of water taken from the stream has a high bacter X level) is Binomial. Thus, an unbiased frequentist estimator for $p_F$ is:
+
+$$
+p_F = \frac{y}{n} = \frac{11}{116} \approx 0.0948
+$$
+
+where $n$ is the number of trials.
+
+**(b)** By assuming as Prior $\text{Beta}(1, 10)$, since the Beta distribution is the conjugate prior for the Binomial, the Posterior will still be a $\text{Beta}(\bar{a},\bar{b})$ distribution with 
+
+$$\bar{a}= a + y = 1 + 11 = 12 \quad \text{ and } \quad \bar{b}= b + n - y = 10 + 116 -11 = 115$$
+
+
+**(c)**  The bayesian estimator for $p$ is the Posterior mean. 
+
+The Posterior has mean and variance:
+
+$$\bar{\mu} = \frac{\bar{a}}{\bar{a} + \bar{b}} \approx 0.0945 \qquad \qquad 
+\bar{\text{Var}} = \frac{\bar{a} \bar{b}}{(\bar{a} + \bar{b})^2(\bar{a} + \bar{b} + 1)} \approx 0.00067 $$
+
+Thus:
+$$
+p_B = \frac{\bar{a}}{\bar{a} + \bar{b}} \approx 0.0945
+$$
+
+We can compute the posterior mean and variance and a 95%  credible interval as below.
+
+```{r}
+y <- 11
+n <- 116
+
+# Prior parameters
+a1 <- 1
+b1 <- 10
+
+# Posterior parameters
+a2 <- a1 + y
+b2 <- b1 + n - y
+
+m2 <- a2/(a2+b2)
+s2 <- sqrt((a2*b2)/((a2+b2+1)*(a2+b2)**2))
+
+min_CI <- qbeta(0.025, a2, b2)
+max_CI <- qbeta(0.975, a2, b2)
+
+cat('\n Prior: \n-------------------------------')
+cat('\n a: ', a1)
+cat('\t b: ', b1, '\n')
+
+cat('\n Posterior: \n---------------------------------------------------------------------------------')
+cat('\n a: ', a2)
+cat('\n b: ', b2)
+cat('\n Mean: ', m2)
+cat('\n Variance: ', s2**2)
+cat('\n 95% C.I.: [', min_CI, ',', max_CI,']\n')
+
+samp <- 500
+p0 <- seq(0, 1, by=1/samp)
+
+prior <- dbeta(p0, a1, b1)
+posterior <- dbeta(p0, a2, b2)
+
+df_plot2 <- data.frame(x = rep(p0,2), 
+                      P = c(prior, posterior), 
+                      Key = c(rep("Prior", length(p0)), rep("Posterior", length(p0)))
+                     )
+
+```
+
+```{r}
+options(repr.plot.width=7, repr.plot.height=4)
+
+ggplot(df_plot2, aes(x=x, y=P, group = Key)) +
+            geom_line(aes(color = Key), size = 1) +
+            theme_bw(base_size=14)+
+            labs(title = "Prior and Posterior distributions", x = "p0", y = "pdf", color = " ")+
+            ylim(0,16)+
+            xlim(0,0.5)+
+
+            #Posterior
+            geom_segment(aes(x = m2, y = 0, xend = m2, yend = 15.5), linetype="longdash", color = "firebrick4", size=0.8) +
+            geom_segment(aes(x = 0.3, y = 12.5, xend = 0.35, yend = 12.5),
+                         linetype="longdash", color = "firebrick4", size=0.8) +   
+            geom_text(aes(x=0.42, label="Posterior Mean", y=12.5), colour="black")+
+
+            geom_vline(xintercept = min_CI, linetype="dotted", color = "firebrick3", size=0.8)+
+            geom_vline(xintercept = max_CI, linetype="dotted", color = "firebrick3", size=0.8)+
+            geom_segment(aes(x = 0.3, y = 11.5, xend = 0.35, yend = 11.5),
+                         linetype="dotted", color = "firebrick3", size=0.8) +
+            geom_text(aes(x=0.4, label="95% C.I.", y=11.5), colour="black")
+```
+
+**(d)** We now want to perform an hypotesis test at $5 \%$ level of significance with both the frequentist and bayesian approach where the null hypothesis is:
+
+$$H_0 : p = 0.1 $$
+
+and the alternative hypothesis is:
+
+$$H_1: p \neq 0.1$$
+
+Let's start with the **Frequentist approach**.
+
+The null distribution of the test statistic is:
+
+    Binom(y|n = 116, p=0.1)
+    
+To estimate the rejection interval we can use the quantile function in a symmetric way to find the two extremes of the rejection area corresponding to a value of $\alpha$ as close as possible to $5\%$. 
+    
+    left <- qbinom(0.025, n, 0.1)
+    right <- qbinom(0.975, n, 0.1)
+
+Then we can then refine our choice of the left and right extremes of the rejection region by selecting two values yielding a level of significance as close as possible to $\alpha$.
+
+```{r}
+left <- qbinom(0.025, n, 0.1)
+right <- qbinom(0.975, n, 0.1)
+
+y.l <- pbinom(left, n, 0.1)
+y.r <- 1- pbinom(right, n, 0.1)
+
+cat('With', left, 'as left extreme and', right, 'as right one we get alpha =', y.l+y.r, '\n')
+
+y.l <- pbinom(left, n, 0.1)
+y.r <- 1- pbinom(right+1, n, 0.1)
+
+cat('With', left, 'as left extreme and', right+1, 'as right one we get alpha =', y.l+y.r, '\n')
+
+y.l <- pbinom(left-1, n, 0.1)
+y.r <- 1- pbinom(right, n, 0.1)
+
+cat('With', left-1, 'as left extreme and', right, 'as right one we get alpha =', y.l+y.r)
+```
+
+The best choice is to select as rejection region $[0,5] \cup [18,110]$. We can see that $y = 11$ lies in the acceptance rejon. Thus we cannot reject the null hypothesis at this level of significance.
+
+Then we have to calculate the p-value $1 - F(y=6)$ where $F(y)$ is the $cdf$. If $\text{p-value} < \alpha$ then the test statistic lies in the rejection region and we cannot accept the null hypothesis at this level of significance as shown in the following plot.
+
+```{r}
+pleft <- dbinom(left-1, 116, 0.1)
+pright <- dbinom(right, 116, 0.1)
+
+rej.level <- pright
+
+ys <- seq(0,116)
+bars <- dbinom(ys, 116, 0.1)
+accept <- c(rep(0, 6), rep(1, right-left), rep(0, n-right+1))
+
+df.freq2 <- data.frame(x = ys, P = bars, acc = accept)
+```
+
+```{r}
+# Plot
+options(repr.plot.width=7, repr.plot.height=5)
+
+ggplot(data=df.freq2, aes(x=x, y=P, fill=factor(ifelse(acc == '1', 'Accept','Reject')))
+      )+ 
+            geom_bar(stat="identity", width=0.8, color = 'coral4', size = 0.8, alpha = 0.8)+
+            geom_hline(yintercept = rej.level, linetype="twodash", color = "blue4", size=0.8)+
+
+            scale_fill_manual(name = " ", values=c("deepskyblue1","lightpink1"))+
+            theme_minimal(base_size=14)+
+            labs(title = "Two-sides hypothesis test - frequentist approach", x = "y", y = "pdf")+
+            xlim(0,25)
+
+```
+
+Let's now repeat the same analysis in the **Bayesian approach**.
+
+In this case to test $H_0$ vs $H_1$ at a level of significance $\alpha = 5 \%$, since the probability of an exact value like the null hypothesis is zero we need to use credibility intervals:
+
+* We compute a $(1- \alpha)\times 100 \% = 95 \%$ credible interval for p
+* If $p_0 = 0.10$ lies outside the interval we reject the null hypothesis. 
+
+We already found in the previous point that a $95 \%$ credible interval for our Posterior distribution is: $\approx [ 0.05, 0.15]$. Since $p_0 = 0.1$ lies inside this interval we cannot reject the null hypothesis at this level of significance.
+
+```{r}
+df_post <- data.frame(x = p0, P = posterior)
+p.rej <- 0.1
+
+options(repr.plot.width=7, repr.plot.height=4)
+
+ggplot(df_post, aes(x=x, y=P)) +
+            geom_line(color = 'coral4', size = 1) +
+            theme_bw(base_size=14)+
+            labs(title = "Two-sides hypothesis test - Bayesian approach", x = "p0", y = "pdf", color = " ")+
+            ylim(0,16)+
+            xlim(0,0.5)+
+
+            geom_segment(aes(x = p.rej, y = 0, xend = p.rej, yend = 14.5), linetype="solid", color = "blue4", size=0.8) +
+            geom_segment(aes(x = 0.2, y = 12.5, xend = 0.22, yend = 12.5),
+                         linetype="solid", color = "blue4", size=0.8) +   
+            geom_text(aes(x=0.25, label="p0 = 0.10", y=12.5), colour="black")+
+
+            geom_vline(xintercept = min_CI, linetype="dotted", color = "firebrick3", size=0.8)+
+            geom_vline(xintercept = max_CI, linetype="dotted", color = "firebrick3", size=0.8)+
+
+            #Reject region
+            geom_ribbon(data=subset(df_post,x>0 & x<=min_CI),aes(ymax=P),ymin=0,fill="red",colour=NA,alpha=0.4)+
+            geom_ribbon(data=subset(df_post,x>=max_CI & x<1),aes(ymax=P),ymin=0,fill="red",colour=NA,alpha=0.4)+
+
+            # Accept region
+            geom_ribbon(data=subset(df_post,x>=min_CI & x<=max_CI),aes(ymax=P),ymin=0,fill="cyan",colour=NA,alpha=0.2)+
+
+            geom_segment(aes(x = 0.2, y = 11.5, xend = 0.22, yend = 11.5),
+                         linetype="dotted", color = "firebrick3", size=0.8) +
+            geom_text(aes(x=0.25, label="95% C.I.", y=11.5), colour="black")
+```
+
+**(e)**  A new measurement, performed one month later on $n = 165$ water samples, gives $y = 9$ high bacter X level. We repeat the same analysis also in this case.
+
+As before, an unbiased frequentist estimator for $p_F$ is:
+
+$$
+p_F = \frac{y}{n} = \frac{9}{165} \approx 0.054
+$$
+
+
+**(f)** By assuming as Prior $\text{Beta}(1, 10)$ as in point **(b)** the Posterior will still be a $\text{Beta}(a',b')$ distribution with 
+
+$$a'= a + y = 1 + 9 = 10 \quad \text{ and } \quad b' = b + n - y = 10 + 165 - 9 = 166$$
+
+On the other hand by choosing as Prior the previous Posterior $\text{Beta}(\bar{a}, \bar{b}) = \text{Beta}(12,115)$ the Posterior will, again, be a $\text{Beta}(a'',b'')$ distribution with 
+
+$$a''= \bar{a} + y = 12 + 9 = 21 \quad \text{ and } \quad b'' = \bar{b} + n - y = 115 + 165 - 9 = 271 $$
+
+
+**(g)** Again, the bayesian estimator for $p$ is the Posterior mean. 
+We can calculate all the relevant quantities as before:
+
+```{r}
+y <- 9
+n <- 165
+
+# - With Beta(1,10) prior ----------------------------------------------------------------------------------------------
+# Prior1 parameters
+a.pr1 <- 1
+b.pr1 <- 10
+
+# Posterior1 parameters
+a.pos1 <- a.pr1 + y
+b.pos1 <- b.pr1 + n - y
+
+m.1 <- a.pos1/(a.pos1+b.pos1)
+s.1 <- sqrt((a.pos1*b.pos1)/((a.pos1 + b.pos1 +1)*(a.pos1 + b.pos1)**2))
+
+min_CI1 <- qbeta(0.025, a.pos1, b.pos1)
+max_CI1 <- qbeta(0.975, a.pos1, b.pos1)
+
+
+cat('--------------------------------------------------')
+cat('\n Prior:')
+cat('\n a: ', a.pr1)
+cat('\t b: ', b.pr1, '\n')
+
+cat('\n Posterior:')
+cat('\n a\': ', a.pos1)
+cat('\n b\': ', b.pos1)
+cat('\n Mean: ', m.1)
+cat('\n Variance: ', s.1**2)
+cat('\n 95% C.I.: [', min_CI1, ',', max_CI1,']\n')
+cat('--------------------------------------------------')
+
+# - With Previous Posterior as prior ---------------------------------------------------------------------------------
+# Prior1 parameters
+a.pr2 <- a2
+b.pr2 <- b2
+
+# Posterior1 parameters
+a.pos2 <- a.pr2 + y
+b.pos2 <- b.pr2 + n - y
+
+m.2 <- a.pos2/(a.pos2+b.pos2)
+s.2 <- sqrt((a.pos2*b.pos2)/((a.pos2 + b.pos2 +1)*(a.pos2 + b.pos2)**2))
+
+min_CI2 <- qbeta(0.025, a.pos2, b.pos2)
+max_CI2 <- qbeta(0.975, a.pos2, b.pos2)
+
+
+cat('--------------------------------------------------')
+cat('\n Prior:')
+cat('\n a: ', a.pr2)
+cat('\t b: ', b.pr2, '\n')
+
+cat('\n Posterior:')
+cat('\n a\'\': ', a.pos2)
+cat('\n b\'\': ', b.pos2)
+cat('\n Mean: ', m.2)
+cat('\n Variance: ', s.2**2)
+cat('\n 95% C.I.: [', min_CI2, ',', max_CI2,']\n')
+cat('--------------------------------------------------')
+```
+
+```{r}
+samp <- 500
+p0 <- seq(0, 1, by=1/samp)
+
+# - With Beta(1,10) prior ----------------------------------------------------------------------------------------------
+prior1 <- dbeta(p0, a.pr1, b.pr1)
+posterior1 <- dbeta(p0, a.pos1, b.pos1)
+
+df1_plot <- data.frame(x = rep(p0,2), 
+                      P = c(prior1, posterior1), 
+                      Key = c(rep("Prior", length(p0)), rep("Posterior", length(p0)))
+                     )
+
+# - With Previous Posterior as prior ---------------------------------------------------------------------------------
+prior2 <- dbeta(p0, a.pr2, b.pr2)
+posterior2 <- dbeta(p0, a.pos2, b.pos2)
+
+df2_plot <- data.frame(x = rep(p0,2), 
+                      P = c(prior2, posterior2), 
+                      Key = c(rep("Prior", length(p0)), rep("Posterior", length(p0)))
+                     )
+```
+
+```{r}
+# - Plot -----------------------------------------------------------------
+
+options(repr.plot.width=10, repr.plot.height=5)
+
+p1 <- ggplot(df1_plot, aes(x=x, y=P, group = Key)) +
+            geom_line(aes(color = Key), size = 1) +
+            theme_bw(base_size=14)+
+            labs(title = "With Beta(1, 10) Prior", x = "p0", y = "pdf", color = " ")+
+            ylim(0,25)+
+            xlim(0,0.5)+
+            geom_segment(aes(x = m.1, y = 0, xend = m.1, yend = 23), linetype="longdash", color = "firebrick4", size=0.8) +
+            geom_segment(aes(x = 0.3, y = 14.5, xend = 0.35, yend = 14.5),
+                         linetype="longdash", color = "firebrick4", size=0.8) +   
+            geom_text(aes(x=0.38, label="Mean", y=14.5), colour="black")+
+
+            geom_vline(xintercept = min_CI1, linetype="dotted", color = "firebrick3", size=0.8)+
+            geom_vline(xintercept = max_CI1, linetype="dotted", color = "firebrick3", size=0.8)+
+            geom_segment(aes(x = 0.3, y = 12.5, xend = 0.35, yend = 12.5),
+                         linetype="dotted", color = "firebrick3", size=0.8) +
+            geom_text(aes(x=0.4, label="95% C.I.", y=12.5), colour="black")+
+            theme(legend.position = "none")
+
+
+p2 <-  ggplot(df2_plot, aes(x=x, y=P, group = Key)) +
+            geom_line(aes(color = Key), size = 1) +
+            theme_bw(base_size=14)+
+            labs(title = "With Beta(12, 115) Prior", x = "p0", y = "pdf", color = " ")+
+            ylim(0,30)+
+            xlim(0,0.5)+
+            geom_segment(aes(x = m.2, y = 0, xend = m.2, yend = 27), linetype="longdash", color = "firebrick4", size=0.8) +
+            geom_segment(aes(x = 0.3, y = 17, xend = 0.35, yend = 17),
+                         linetype="longdash", color = "firebrick4", size=0.8) +   
+            geom_text(aes(x=0.38, label="Mean", y=17), colour="black")+
+
+            geom_vline(xintercept = min_CI2, linetype="dotted", color = "firebrick3", size=0.8)+
+            geom_vline(xintercept = max_CI2, linetype="dotted", color = "firebrick3", size=0.8)+
+            geom_segment(aes(x = 0.3, y = 15, xend = 0.35, yend = 15),
+                         linetype="dotted", color = "firebrick3", size=0.8) +
+            geom_text(aes(x=0.4, label="95% C.I.", y=15), colour="black")
+
+
+tgrob <- text_grob('Posterior distributions',size = 18)
+plot0 <- as_ggplot(tgrob)
+
+ggarrange(plot0, NULL ,p1, p2, ncol = 2,nrow = 2, widths = c(4,5), heights = c(1,5))
+```
+
+**(h)** We now repeat the previous hypothesis test at $5 \%$ level of significance with both the frequentist and bayesian approach.
+
+Let's start with the **Frequentist approach**.
+
+```{r}
+left <- qbinom(0.025, n, 0.1)
+right <- qbinom(0.975, n, 0.1)
+
+y.l <- pbinom(left, n, 0.1)
+y.r <- 1- pbinom(right, n, 0.1)
+
+cat('With', left, 'as left extreme and', right, 'as right one we get alpha =', y.l+y.r, '\n')
+
+y.l <- pbinom(left, n, 0.1)
+y.r <- 1- pbinom(right+1, n, 0.1)
+
+cat('With', left, 'as left extreme and', right+1, 'as right one we get alpha =', y.l+y.r, '\n')
+
+pleft <- dbinom(left-1, 165, 0.1)
+pright <- dbinom(right, 165, 0.1)
+
+rej.level <- pleft
+
+ys <- seq(0,165)
+bars <- dbinom(ys, 165, 0.1)
+accept <- c(rep(0, 9), rep(1, right-left), rep(0, n-right+1))
+
+df.freq2 <- data.frame(x = ys, P = bars, acc = accept)
+
+# Plot
+options(repr.plot.width=7, repr.plot.height=5)
+
+ggplot(data=df.freq2, aes(x=x, y=P, fill=factor(ifelse(acc == '1', 'Accept','Reject')))
+      )+ 
+            geom_bar(stat="identity", width=0.8, color = 'coral4', size = 0.8, alpha = 0.8)+
+            geom_hline(yintercept = rej.level, linetype="twodash", color = "blue4", size=0.8)+
+
+            scale_fill_manual(name = " ", values=c("deepskyblue1","lightpink1"))+
+            theme_minimal(base_size=14)+
+            labs(title = "Two-sides hypothesis test - frequentist approach", x = "y", y = "pdf")+
+            xlim(0,35)
+```
+
+We can see that $y=9$ is in the acceptance region (although just at the border), thus we cannot reject $H_0$ at this level of significance.
+
+Let's now repeat the same analysis in the **Bayesian approach** for both the posteriors we obtained before.
+
+```{r}
+df_post1 <- data.frame(x = p0, P = posterior1)
+df_post2 <- data.frame(x = p0, P = posterior2)
+p.rej <- 0.1
+
+options(repr.plot.width=7, repr.plot.height=4)
+
+p1 <- ggplot(df_post1, aes(x=x, y=P)) +
+            geom_line(color = 'coral4', size = 1) +
+            theme_bw(base_size=12)+
+            labs(title = "With Beta(1, 10) Prior", x = "p0", y = "pdf", color = " ")+
+            ylim(0,25)+
+            xlim(0,0.15)+
+
+            geom_vline(xintercept = p.rej, linetype="solid", color = "blue4", size=0.8) +
+            geom_segment(aes(x = 0.2, y = 17, xend = 0.25, yend = 17),
+                         linetype="solid", color = "blue4", size=0.8) +   
+            geom_text(aes(x=0.12, label="p0 = 0.10", y=17), colour="blue4")+
+
+            geom_vline(xintercept = min_CI1, linetype="dotted", color = "firebrick3", size=1)+
+            geom_vline(xintercept = max_CI1, linetype="dotted", color = "firebrick3", size=1)+
+
+            #Reject region
+            geom_ribbon(data=subset(df_post1,x>0 & x<=min_CI1),aes(ymax=P),ymin=0,fill="red",colour=NA,alpha=0.4)+
+            geom_ribbon(data=subset(df_post1,x>=max_CI1 & x<1),aes(ymax=P),ymin=0,fill="red",colour=NA,alpha=0.4)+
+
+            # Accept region
+            geom_ribbon(data=subset(df_post1,x>=min_CI1 & x<=max_CI1),aes(ymax=P),ymin=0,fill="cyan",colour=NA,alpha=0.2)
+
+
+p2 <- ggplot(df_post2, aes(x=x, y=P)) +
+            geom_line(color = 'coral4', size = 1) +
+            theme_bw(base_size=12)+
+            labs(title = "With Beta(12, 115) Prior", x = "p0", y = "pdf", color = " ")+
+            ylim(0,30)+
+            xlim(0,0.15)+
+
+            geom_vline(xintercept = p.rej, linetype="solid", color = "blue4", size=0.8) +
+            geom_segment(aes(x = 0.2, y = 12.5, xend = 0.22, yend = 12.5),
+                         linetype="solid", color = "blue4", size=0.8) +   
+            geom_text(aes(x=0.12, label="p0 = 0.10", y=20), colour="blue4")+
+
+            geom_vline(xintercept = min_CI2, linetype="dotted", color = "firebrick3", size=1)+
+            geom_vline(xintercept = max_CI2, linetype="dotted", color = "firebrick3", size=1)+
+
+            #Reject region
+            geom_ribbon(data=subset(df_post2,x>0 & x<=min_CI2),aes(ymax=P),ymin=0,fill="red",colour=NA,alpha=0.4)+
+            geom_ribbon(data=subset(df_post2,x>=max_CI2 & x<1),aes(ymax=P),ymin=0,fill="red",colour=NA,alpha=0.4)+
+
+            # Accept region
+            geom_ribbon(data=subset(df_post2,x>=min_CI2 & x<=max_CI2),aes(ymax=P),ymin=0,fill="cyan",colour=NA,alpha=0.2)
+
+
+tgrob <- text_grob('Bayesian approach',size = 16)
+plot0 <- as_ggplot(tgrob)
+
+ggarrange(plot0, NULL ,p1, p2, ncol = 2,nrow = 2, heights = c(1,5))
+```
+
+Using the previously computed C.I. for the two Posteriors, we can see that when using as Prior $\text{Beta}(1,10)$  $p_0$ lies outside the C.I. $[0.0277, 0.0954]$ so we can reject the null hypothesis at this level of significance.
+
+The same cannot be said when using $\text{Beta}(12,115)$ as Prior as in this case $p_0$ is in the C.I. $[ 0.0452, 0.1041]$ and so we cannot reject the null hypothesis.
+
+```{r}
+
+```
+
+```{r}
+
+```

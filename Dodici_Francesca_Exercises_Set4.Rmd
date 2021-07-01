@@ -1,0 +1,369 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.10.3
+  kernelspec:
+    display_name: R
+    language: R
+    name: ir
+---
+
+# R lab exercises - Set 4
+
+```{r}
+# ** Libraries and packages **
+    library(tidyverse)
+    library(lubridate) 
+    library("ggpubr")
+    #install.packages('GoFKernel')
+    library('GoFKernel')
+    #install.packages('dplyr')
+    library(dplyr)
+    library(scales)
+```
+
+## Exercise 1 - Six Boxes Toy Model: inference
+
+The six boxes toy model is described in reference [1].
+Labeling the boxes as follows:
+
+* **$H_0$** is the box with 0 white stones (none)
+* **$H_1$** is the box with 1 white stones
+* **$H_2$** is the box with 2 white stones
+* **$H_3$** is the box with 3 white stones
+* **$H_4$** is the box with 4 white stones
+* **$H_5$** is the box with 5 white stones (all)
+
+write a program in R that:
+
+1. Allows the user to insert the color of a randomly extracted stone
+2. Prints on the standard output the probability of selecting each box
+3. Plots the probability for each box as a function of the extraction step
+
+
+### Solution
+
+Let's start by writing a function to compute the probability, at the $n$-th trial, of having selected the $j$-th box given the background information from the previous $n-1$ trials. According to Bayes' theorem the probability should be computed as follows:
+
+```{r}
+prob_box <- function(extractions){  
+    
+    N <- length(extractions)
+    
+    p_H0 <- c(1/6, rep(0, N)) # Vectors with updated probabilities of having selected B0 (init. to 1/6)
+    p_H1 <- c(1/6, rep(0, N)) # Vectors with updated probabilities of having selected B1 (init. to 1/6)
+    p_H2 <- c(1/6, rep(0, N)) # Vectors with updated probabilities of having selected B2 (init. to 1/6)
+    p_H3 <- c(1/6, rep(0, N)) # Vectors with updated probabilities of having selected B3 (init. to 1/6)
+    p_H4 <- c(1/6, rep(0, N)) # Vectors with updated probabilities of having selected B4 (init. to 1/6)
+    p_H5 <- c(1/6, rep(0, N)) # Vectors with updated probabilities of having selected B5 (init. to 1/6)
+    
+    df_pH <- data.frame(p_H0, p_H1, p_H2, p_H3, p_H4, p_H5) # Dataframe with all probabilities
+           
+    for (i in 1:N){            
+        
+        for(j in 0:5){
+            p_wnj <- j/5     # Probability of getting a white stone at the n-th extraction having selected the j-th box
+            p_bnj <- (5-j)/5 # Probability of getting a black stone at the n-th extraction having selected the j-th box
+            
+            df_pH[i+1, j+1] <- ifelse(extractions[i] == 0,
+                                     p_wnj*df_pH[i, j+1], # if white stone is extracted 
+                                     p_bnj*df_pH[i, j+1]) # if black stone is extracted
+            
+            #Compute normalization factor
+            norm <- sum(df_pH[i, ])
+            
+            df_pH[i+1, j+1] <- df_pH[i+1, j+1]/norm
+                 
+        }
+        
+    
+    }
+    
+    return(df_pH)   
+}
+
+```
+
+And a function to plot the evolution of the probabilities
+
+```{r}
+prob_plot <- function(df_pH){
+    
+    options(repr.plot.width=10, repr.plot.height=6)
+
+    # Plot of H0
+    H0 <- ggplot(df_pH) +
+                geom_point(aes(x=as.numeric(row.names(df_pH))-1, y = p_H0), color = "orangered2", size = 1) +
+                labs(title = "BOX H0") +
+                theme_classic()+
+                scale_x_continuous(name= "Extraction")+
+                scale_y_continuous(name= "Probability", breaks = seq(from = 0, to = 1, by = 0.2), limits = c(0, 1))
+
+    H1 <- ggplot(df_pH) +
+                geom_point(aes(x=as.numeric(row.names(df_pH)), y = p_H1), color = "springgreen2", size = 1) +
+                labs(title = "BOX H1") +
+                theme_classic()+
+                scale_x_continuous(name= "Extraction")+
+                scale_y_continuous(name= "Probability", breaks = seq(from = 0, to = 1, by = 0.2), limits = c(0, 1))
+
+    H2 <- ggplot(df_pH) +
+                geom_point(aes(x=as.numeric(row.names(df_pH))-1, y =p_H2), color = "cyan2", size = 1) +
+                labs(title = "BOX H2") +
+                theme_classic()+
+                scale_x_continuous(name= "Extraction")+
+                scale_y_continuous(name= "Probability", breaks = seq(from = 0, to = 1, by = 0.2), limits = c(0, 1))
+    
+    H3 <- ggplot(df_pH) +
+                geom_point(aes(x=as.numeric(row.names(df_pH))-1, y = p_H3), color = "hotpink2", size = 1) +
+                labs(title = "BOX H3") +
+                theme_classic() +
+                scale_x_continuous(name= "Extraction") +
+                scale_y_continuous(name= "Probability", breaks = seq(from = 0, to = 1, by = 0.2), limits = c(0, 1))
+
+    H4 <- ggplot(df_pH) +
+                geom_point(aes(x=as.numeric(row.names(df_pH))-1, y = p_H4), color = "gold2", size = 1) +
+                labs(title = "BOX H4") +
+                theme_classic() +
+                scale_x_continuous(name= "Extraction")+
+                scale_y_continuous(name= "Probability", breaks = seq(from = 0, to = 1, by = 0.2), limits = c(0, 1))
+
+    H5 <- ggplot(df_pH) +
+                geom_point(aes(x=as.numeric(row.names(df_pH))-1, y = p_H5), color = "mediumorchid2", size = 1) +
+                labs(title = "BOX H5") +
+                theme_classic() +
+                scale_x_continuous(name= "Extraction") +
+                scale_y_continuous(name= "Probability", breaks = seq(from = 0, to = 1, by = 0.2), limits = c(0, 1))
+
+    ggarrange(H0, H1, H2, H3, H4, H5, ncol = 3, nrow = 2)
+}
+```
+
+Now let's print and plot the results.
+
+To see the results step by step, gradually add, after each trial, a 0 if a white stone was extracted or a 1 if a black one was picked to the vector `extractions` and re-run the cell.
+
+**1.** Update vector `extractions` after every new trial
+
+```{r}
+# 0 = white
+# 1 = black
+
+extractions <- c(1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1)
+```
+
+**2.** Prints dataframe with the probability of selecting each box updated at each new extraction
+
+```{r}
+prob_box(extractions)
+dfH <- prob_box(extractions)
+```
+
+**3.** Plot the probability for each box as a function of the extraction step
+
+```{r}
+prob_plot(dfH)
+```
+
+## Exercise 2 - Six Boxes Toy Model: simulation
+
+Consider again the six boxes toy model of the previous exercise and write a simulation program that:
+1. Selects a random box
+2. Makes random sampling from the box
+3. Prints on the standard output the probability of selecting each box
+4. Plots the probability for each box as a function of the number of trial
+
+
+### Solution
+
+In this exercise we can make use of the functions defined in the previous exercise but this time, instead of manually inserting the vector with the extracted numbers we can simlate the selection of a box by picking a random number between 0 and 5 and then sample from it.
+
+**1.** Let's start by picking a random number between 0 and 5 using the built-in function `sample(0:5, 1)`
+
+```{r}
+j <- sample(0:5,1)
+```
+
+**2.** Now we can create the vectors corresponding to the 5 boxes and then sample N times with `sample(Bj, N)` from the selected one. Since the value of the variable j is unknown to the user, we still don't know where we are sampling from.
+
+```{r}
+N <- 30  #umber of extractions
+extractions <- NULL
+
+B0 <- c(1,1,1,1,1)
+B1 <- c(0,1,1,1,1)
+B2 <- c(0,0,1,1,1)
+B3 <- c(0,0,0,1,1)
+B4 <- c(0,0,0,0,1)
+B5 <- c(0,0,0,0,0)
+
+if(j == 0){
+    extractions <- sample(B0, N, replace = TRUE)
+    }else if(j == 1){
+    extractions <- sample(B1, N, replace = TRUE)
+    }else if(j == 2){
+    extractions <- sample(B2, N, replace = TRUE)
+    }else if(j == 3){
+    extractions <- sample(B3, N, replace = TRUE)
+    }else if(j == 4){
+    extractions <- sample(B4, N, replace = TRUE)
+    }else {
+    extractions <- sample(B5, N, replace = TRUE)
+}
+    
+    
+extractions
+```
+
+**3.** Now we can print the dataframe with the probabilities of selecting each box updated at each new extraction using the function `prob_box()` previously defined.
+
+```{r}
+prob_box(extractions)
+dfH <- prob_box(extractions)
+```
+
+**4.** And plot the probability for each box as a function of the number of trial with `plot_box()`.
+
+```{r}
+prob_plot(dfH)
+```
+
+To verify the accurateness of our predictions we can now print the hidden variable j to see which box was actually chosen
+
+```{r}
+print(paste("The box chosen was B", j))
+```
+
+## Exercise 3 
+
+An important property of the gamma distribution is the so-called *reproductive property*.
+
+Given a sequence of independent random variable $X_j \sim Gamma(\alpha_j; \beta)$, it follows that:
+
+$$
+Y = \sum_{j=1}^n X_j \rightarrow Gamma(\alpha_j, \beta) \quad \text{where} \quad \alpha = \sum_{j=1}^n \alpha_j
+$$
+
+If $\alpha = m$ is an integer, a random variable from gamma distribution $Gamma(m; \beta)$ (also known as Erlang distribution) can be obtained by summing m independent exponential random variables $X_j \sim Exp(\beta)$:
+
+$$
+Y = \beta \sum_{j=1}^n (- ln U_j) = - \beta ln \prod_{j=1}^nU_j
+$$
+
+* Write an algorithm to sample variables from an Erlang distribution $Gamma(m; \beta)$
+
+
+### Solution
+
+Let's define a function `rerl(n,m,beta)` where n is the number of random numbers I want to extract and m and beta the parameters of the erlang function. According to the reasonings exposed above, to do this we can simply sample from a uniform distribution and then calculate Y as above, which will be distributed according to an Erlang distribution $Gamma(m; \beta)$ 
+
+```{r}
+rerl <- function(n,m,beta) replicate(n, (−1/beta)∗log(prod(runif(m, 0, 1))))
+```
+
+To check whether our algorithm samples correctly we can plot a histogram of the random values extracted and overimpose the pdf obtained from the R built-in function `dgamma(n, m, beta)`.
+
+```{r}
+n <- 100000
+m <- 5
+
+options(repr.plot.width=6, repr.plot.height=4)
+
+df_random <- data.frame(r = rerl(n, m , beta)) # random numbers sampled 
+th_dist <- dgamma(0:200,m, beta)          # Theoretical pdf
+df_th  <- data.frame(x = 0:200, y = th_dist)
+
+ggplot() +
+        geom_histogram(data=df_random, aes(r,y=..density.., color = 'a'), fill="violetred2", alpha = 0.3, size =0.7)+
+        geom_line(data=df_th, aes(x, y, color = 'b'), linetype ="dashed", size = 1) +
+        labs(title = "Sampling with rgamma") +
+        theme_classic()+
+        theme(legend.position = c(0.8, 0.25)) +
+        scale_colour_manual(labels =c("Random sampling", "Theoretical pdf"), 
+                            breaks = c("a","b"), 
+                            values = c("violetred4","forestgreen"))+
+        scale_x_continuous(name= "x") +
+        labs(y= "pdf", color = " ")
+```
+
+## Exercise 4 
+
+One of the first random number generator was proposed by von Neumann, the so-called *middle square* algorithm.
+
+Write R code to implement this type of generator and, given a fixed digit number input, square it an remove the leading and trailing digits, in order to return a number with the same number of digits as the original number.
+
+*Suggestion*: after having squared the number, convert it to a list of characters
+
+`(number <- unlist(strsplit(as.character(x.squared),"")))`
+
+and, after having removed the head and tail of the list, convert it back to a number
+
+`(as.numeric(paste(number.after.trimming, collapse="")))`
+
+
+
+### Solution
+
+Let's write a function `VNMS(n, seed)` to generate n random numbers using the con Neumann middle square algorithm given a starting number (seed). In this method, to generate a sequence of n-digit pseudorandom numbers, an n-digit starting value is created and squared, producing a 2n-digit number. If the result has fewer than 2n digits, leading zeroes are added to compensate. The middle n digits of the result would be the next number in the sequence, and returned as the result. This process is then repeated to generate more numbers.
+
+```{r}
+VNMS <- function(n, seed){ 
+    randvector <- NULL
+    for (i in 1:n){
+        x.squared <- seed^2                                    # compute square of the seed        
+        number <- unlist(strsplit(as.character(x.squared),"")) # convert seed to list of characters
+        len <- length(unlist(strsplit(as.character(seed),""))) # compute number of digits
+        
+        ifelse((length(number)<2*len),                               # if number does not have 2*len digits
+                number <- c(rep(0, 2*len - length(number)), number), # add zeros at beginning to compensate 
+                number <- number)
+        
+        number.after.trimming <- number[(len/2+1):(3*len/2)]          # remove head and tail
+        seed <- as.numeric(paste(number.after.trimming, collapse="")) # convert back to number
+        randvector <- c(randvector,seed)
+        }
+        return(randvector)
+    }
+```
+
+```{r}
+VNMS(500, 1237602975)
+```
+
+We can see that the algorithm is not very efficient as when the first digit of the selected sequence is 0 the length of the extracted numbers decreases. This might lead to a sequence of 0s. To improve the results we can add to the function a check of presence of 0s as starting digits: when this happens the number gets substituted with another number (for example 3).
+
+```{r}
+improvedVNMS <- function(n, seed){ 
+        randvector <- NULL
+        for (i in 1:n){
+            x.squared <- seed^2                                    # compute square of the seed        
+            number <- unlist(strsplit(as.character(x.squared),"")) # convert seed to list of characters
+            len <- length(unlist(strsplit(as.character(seed),""))) # compute number of digits
+
+            ifelse((length(number)<2*len),                               # if number does not have 2*len digits
+                    number <- c(rep(0, 2*len - length(number)), number), # add zeros at beginning to compensate 
+                    number <- number)
+
+            number.after.trimming <- number[(len/2+1):(3*len/2)]          # remove head and tail
+            # check if first digit is 0
+            ifelse( number.after.trimming[1]==0,
+                    number.after.trimming[1] <- 3,
+                    number.after.trimming <- number.after.trimming               
+                   )
+            seed <- as.numeric(paste(number.after.trimming, collapse="")) # convert back to number
+            randvector <- c(randvector,seed)
+            }
+            return(randvector)
+        }
+```
+
+```{r}
+improvedVNMS(500, 1237602975)
+```
+
+```{r}
+
+```

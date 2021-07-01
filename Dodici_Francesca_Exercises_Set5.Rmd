@@ -1,0 +1,590 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.10.3
+  kernelspec:
+    display_name: R
+    language: R
+    name: ir
+---
+
+# R lab exercises - Set 5
+
+```{r}
+# ** Libraries and packages **
+    library(tidyverse)
+    library(lubridate) 
+    library("ggpubr")
+    #install.packages('GoFKernel')
+    library('GoFKernel')
+    #install.packages('dplyr')
+    library(dplyr)
+    library(scales)
+    library(reshape2)
+```
+
+## Exercise 1
+
+A publishing company has recently launched a new journal. In order to determine how effective it is in reaching its possible audience, a market survey company selects a random sample of people from a possible target audience and interviews them. Out of $150$ interviewed people, $29$ have read the last issue of the journal.
+
+1. What kind of distribution would you assume for $y$, the number of people that have seen the last issue of the journal ?
+2. Assuming a uniform prior, what is the posterior distribution for $y$ ?
+3. Plot both posterior and likelihood ditributions functions
+
+
+### Solution
+
+**1.** Since we are considering a model with no parameters where 
+
+- the probability $p$ that a person has read the issue is constant in all interviews 
+- all interviews are independent
+
+the appropriate probability distribution for $y$, the number of people who have read the journal among the $n = 150$ people interviewed is the binomial distribution:
+
+$$
+P(y|p,n,M) = {n\choose y} p^y(1-p)^{n-y} = {150\choose 29} p^{29}(1-p)^{121} \qquad \text{with} \qquad y\leq n
+$$
+
+
+**2.** Given the previous Likelyhood, assuming a uniform Prior $P(p|M) \sim \mathcal{U}(0,1)$the posterior is simply proportional to the likelyhood with normalization factor $Z$ (the evidence $P(y|n,M)$):
+
+$$P(p|y,n,M) = \frac{1}{Z} p^y(1-p)^{n-y} = \frac{1}{Z} P^*(p|y,n,M) $$
+
+$$\text{with} \qquad Z = \int_0^1 P^*(p|y,n,M) dp \approx \sum_j P^*(p_j|y,n,M) \Delta p_j$$
+
+thus, the Posterior is a re-normalized binomial distribution.
+
+
+**3.** Now we can plot the Posterior and Likelyhood as a function of p (which will be identical since the prior is uniform)
+
+```{r}
+options(repr.plot.width=6, repr.plot.height=3.5)
+
+n <- 120 # Number of interviews
+y <- 21  # Number of people who read the issue
+
+# To normalize we numerically compute Z
+n.sample <- 3000
+delta.p <- 1/n.sample
+p <- seq(0,1, length.out = n.sample) # Probability that a interviewed person has read the issue
+
+p.star <- dbinom(x=y, size=n, prob = p) # Un-normalized Posterior
+Z <- delta.p*sum(p.star)
+p.norm <- p.star/Z
+
+df  <- data.frame(p=rep(p,2), 
+                  P=rep(p.norm,2), 
+                  key = c(rep("Likelyhood", length(p)), rep("Posterior", length(p)))
+                  )
+
+ggplot(df, aes(x=p, y=P, group=key)) +
+    geom_line(aes(linetype=key, color=key), size = 1) +
+    scale_linetype_manual(values=c("solid", "longdash"))+
+    theme_bw()+
+    labs(title = "y = 21", x = "p", y = "density", color = " ", linetype= " ")
+```
+
+## Exercise 2 
+
+* Three students want to construct their prior probability about the proportion of residents that support the building of a new concert hall in their small town.
+* Anna thinks that her prior is a beta distribution with mean 0.2 and a standard deviation of 0.08.
+* Benny moved only recently to this new town and therefore he does non have the slightest idea about it. Therefore he decides to use a uniform prior.
+* Chris believes that his prior should have a trapezoidal shape
+
+$$
+f(x)=
+\begin{cases}
+20x & 0 \leq x < 0.1 \\
+2 & 0.1 \leq x < 0.3 \\
+5 -10x & 0.3 \leq x < 0.5 \\
+0 & x \geq 0.5 \\
+\end{cases}
+$$
+
+1. Draw and compare the three prior distributions.
+
+The next day the three students decide to interview a sample of 100 citizens of the small town, asking for their opinion. Out of the interviewed sample, 26 support the building of the new concert hall.
+
+2. Evaluate and draw the three posterior distributions.
+3. Give an estimate of the most probable value and the 95% credibility interval.
+
+
+### Solution
+**1.** The beta distribution assumed by Anna as her Prior has the following analytical expression:
+
+$$P_A(x|M) = Beta(x | \alpha, \beta, M) =\frac{1}{\mathrm{B}(\alpha, \beta)} x^{\alpha-1}(1-x)^{\beta-1}$$
+
+where the mean $\mu$ and standard deviation $\sigma$ are:
+
+$$\mu = \frac{\alpha}{\alpha + \beta} = 0.2 \qquad \qquad 
+\sigma = \sqrt{\frac{\alpha \beta}{(\alpha + \beta)^2(\alpha + \beta + 1)}} = 0.08 $$
+
+$$
+\Longrightarrow \alpha = \mu \left( \frac{\mu (1- \mu)}{\sigma^2} -1 \right) = 4.8 \qquad \qquad
+\beta = \left( \frac{\mu (1- \mu)}{\sigma^2} -1 \right)(1 - \mu) = 19.2$$
+
+and $\mathrm{B}(\alpha, \beta)$ is a normalization factor. This pdf can be created by simply using the R function `dbeta(x, alpha, beta)`.
+
+The uniform distruibution assumed by Benny as Prior is simply:
+$$
+P_B(x|M) = \mathcal{U}(0,1) = \begin{cases}
+1 & 0 < x < 1 \\
+0 & \text{otherwise}
+\end{cases}
+$$
+again, we can easily compute and plot this by using the built-in function `dunif(x, 0, 1)`
+
+On the other hand for Chris' Prior
+$$
+P_C(x|M) = f(x)
+$$
+
+($f(x)$ being the trapezoidal function previously defined) we have to build the pdf `dtrapez(x)` as below. In this case we can normalize the $pdf$ simply by dividing for the area of the trapezium defined by the $pdf$ itself ($\frac{1}{2} \cdot (0.5+0.2)\cdot2 = 0.7$). 
+
+```{r}
+x <- seq(0, 1, length.out = 201)
+
+# Anna's Prior
+alpha <- 4.8
+beta  <- 19.2
+prior_A <- dbeta(x, alpha, beta)
+
+# Benny's Prior
+prior_B <- dunif(x, 0, 1)
+
+# Chris' Prior
+dtrapez <- Vectorize(function(x){
+    dt <- if(x>=0 & x<0.1){
+        20*x
+    } else if(x>=0.1 & x<0.3){
+        2
+    } else if(x>=0.3 & x<0.5){
+        5 - 10*x
+    } else{
+        0
+    }
+    return(dt/0.7)
+})
+
+prior_C <- dtrapez(x)
+
+df_priors <- data.frame(x=rep(x,3), 
+                        P=c(prior_A, prior_B, prior_C), 
+                        Prior = c(rep("Anna", length(x)), rep("Benny", length(x)), rep("Chris", length(x)))
+                        )
+```
+
+```{r}
+options(repr.plot.width=6, repr.plot.height=4)
+
+ggplot(df_priors, aes(x=x, y=P, group=Prior)) +
+            geom_line(aes(color = Prior), size = 0.8) +
+            theme_bw()+
+            labs(title = "Comparison of the three Prior distributions", x = "x", y = "P(x|M)", color = " ")
+```
+
+<!-- #region -->
+**2.** As in the previous exercise, also in this case we are dealing with a a model with no parameters where 
+
+- the probability $x$ that a residents supports the building of the new concert hall is constant 
+- all interviews are independent
+
+Thus, with $n=100$ interviewed citizens and $y= 26$ of them welcoming the constuction, the **Likelihood** is a binomial distribution of the type:
+
+$$P(y | x, n, M)={n\choose y} x^{y}(1-x)^{n-y} = 
+\binom{100}{26} x^{26}(1-x)^{74} $$
+
+We know that with a Beta Prior like Anna's, the Posterior also is a Beta distribution with parameters
+
+$$
+\alpha_2 = \alpha + y = 4.8 + 26 = 30.8 \qquad \qquad \beta_2= \beta + n - y = 19.2 + 100 - 26 = 93.2
+$$
+
+$$P_A(x| y, n, M) = Beta(x | \alpha_2 , \beta_2 , M) =\frac{1}{\mathrm{B}(\alpha_2, \beta_2)} x^{\alpha_2-1}(1-x)^{\beta_2-1}$$
+
+
+We also know from **Exercise 1** that with a uniform prior like Benny's, the Posterior is still a binomial pdf with a different normalization factor $Z$.
+
+$$P_B(x|y,n,M) = \frac{1}{Z} x^y(1-x)^{n-y} = \frac{1}{Z} P^*(x|y,n,M) $$
+
+For Chris, we have to make use of Bayes' theorem and calculate the Posterior as $\propto$ Likelihood $\times$ Prior:
+
+$$P_C(x | y, n, M)=\frac{1}{K} P(y | x, n, M) P(x | M) = \frac{1}{K} \binom{100}{26} x^{26}(1-x)^{74} \cdot f(x) $$
+
+with $K$ a normalization factor which can be computed numerically.
+<!-- #endregion -->
+
+```{r}
+n <- 100 # Number of interviews
+y <- 26  # Number of interviewed people favourable to the construction
+
+n.sample <- 3000
+delta.x <- 1/n.sample
+x <- seq(0, 1, length.out=n.sample) # Probability that a person is favourable
+
+likelihood <- dbinom(y, n, x)
+
+# Anna's Posterior
+alpha2 <- alpha + y
+beta2 <- beta + n - y
+
+posterior_A <- dbeta(x, alpha2, beta2) # Already normalized
+
+# Benny's Posterior
+pB.star <- dbinom(y, n, x)   # Un-normalized Posterior
+ZB <- delta.x*sum(pB.star)   # Normalization factor
+
+posterior_B <- pB.star/ZB    # Normalized
+
+# Chris' Posterior
+pC.star <- likelihood*dtrapez(x)    # Un-normalized Posterior
+ZC <- delta.x*sum(pC.star)          # Normalization factor
+
+posterior_C <- pC.star/ZC    # Normalized
+
+df_posteriors <- data.frame(x=rep(x,3), 
+                        P=c(posterior_A, posterior_B, posterior_C), 
+                        Post = c(rep("Anna", length(x)), rep("Benny", length(x)), rep("Chris", length(x)))
+                        )
+```
+
+```{r}
+options(repr.plot.width=6, repr.plot.height=4)
+
+ggplot(df_posteriors, aes(x=x, y=P, group=Post)) +
+            geom_line(aes(color = Post), size = 0.8) +
+            theme_bw()+
+            labs(title = "Comparison of the three Posterior distributions", x = "x", y = "P(x| y, n, M)", color = " ")
+```
+
+**3.** The most probable value can be estimated as the $x$ corresponding to the maximum of the pdf. On the other hand, the $95 \%$ credibility interval $[x_1, x_2]$ can be found by setting:
+
+$$
+P\left(x_{1} \leq x<x_{2} | D, M\right)=\int_{x_{1}}^{x_{2}} P(x | D, M) d x \sim 0.95
+$$
+
+We can calculate by subtracting the tails each with area $(1-0.95)/2=0.025$:
+
+$$
+P(x \leq x_{1} | D, M)=\int_{-\infty}^{x_{1}} P(x | D, M) d x = 
+P(x \geq x_{2} | D, M)=\int_{p_{x}}^{\infty} P(x | D, M) d x \stackrel{!}{=}0.025
+$$
+
+This can be done using the quantile function for built-in R functions like the Beta distribution (`qbeta(area, alpha, beta)`) or numerically for the other two pdfs.  
+
+```{r}
+# Most probable values 
+max_A <- x[which.max(posterior_A)]
+max_B <- x[which.max(posterior_B)]
+max_C <- x[which.max(posterior_C)]
+
+# Confidence intervals
+x_1A <- qbeta(0.025, alpha2, beta2)   
+x_2A <- qbeta(0.975, alpha2, beta2)   
+
+cumsumB <- cumsum(posterior_B)/n.sample              
+x_1B <- x[cumsumB>=0.025][1]  # x1 is the first x for which the integral is > 0.025                                 
+x_2B <- x[cumsumB>=0.975][1]  # x2 is the first x for which the integral is > 0.975                    
+
+cumsumC <- cumsum(posterior_C)/n.sample              
+x_1C <- x[cumsumC>=0.025][1]                                 
+x_2C <- x[cumsumC>=0.975][1]  
+
+print(paste("With Anna's Prior the most probable value is: ", max_A, "with a C.I [", x_1A, ",", x_2A, "]"))
+print(paste("With Benny's Prior the most probable value is: ", max_B, "with a C.I [", x_1B, ",", x_2B, "]"))
+print(paste("With Chris'Prior the most probable value is: ", max_C, "with a C.I [",x_1C, ",", x_2C, "]"))
+```
+
+We can more easily visualize the result with the following plot:
+
+```{r}
+# Plot with max and C.I.
+
+df_post2 <- data.frame(x=x, pA = posterior_A, pB = posterior_B, pC = posterior_C)
+
+options(repr.plot.width=8, repr.plot.height=3)
+
+# Anna
+A_plot <- ggplot(df_post2) +
+            geom_line(aes(x=x, y= pA), color = "coral1", size = 1) +
+            geom_vline(xintercept = max_A, linetype="longdash", color = "black", size=0.5)+
+            geom_text(aes(x=(max_A+0.02), label="max", y=5), colour="black", angle=90) +
+            geom_vline(xintercept = x_1A, linetype="dotted", color = "red", size=0.8)+
+            geom_text(aes(x=(x_1A-0.04), label="x1", y=5), colour="red") +
+            geom_vline(xintercept = x_2A, linetype="dotted", color = "red", size=0.8)+
+            geom_text(aes(x=(x_2A+0.03), label="x2", y=5), colour="red") +
+            theme_bw()+
+            xlim(0,0.5)+
+            ylim(0,10.5)+
+            labs(title = "Anna", x = "x", y = "Posterior")
+
+# Benny
+B_plot <- ggplot(df_post2) +
+            geom_line(aes(x=x, y= pB), color = "seagreen3", size = 1) +
+            geom_vline(xintercept = max_B, linetype="longdash", color = "black", size=0.5)+
+            geom_text(aes(x=(max_B+0.02), label="max", y=5), colour="black", angle=90) +
+            geom_vline(xintercept = x_1B, linetype="dotted", color = "red", size=0.8)+
+            geom_text(aes(x=(x_1B-0.04), label="x1", y=5), colour="red") +
+            geom_vline(xintercept = x_2B, linetype="dotted", color = "red", size=0.8)+
+            geom_text(aes(x=(x_2B+0.03), label="x2", y=5), colour="red") +
+            theme_bw()+
+            xlim(0,0.5)+
+            ylim(0,10.5)+
+            labs(title = "Benny", x = "x", y = "Posterior")
+
+# Chris
+C_plot <- ggplot(df_post2) +
+            geom_line(aes(x=x, y= pC), color = "dodgerblue1", size = 1) +
+            geom_vline(xintercept = max_C, linetype="longdash", color = "black", size=0.5)+
+            geom_text(aes(x=(max_C+0.02), label="max", y=5), colour="black", angle=90) +
+            geom_vline(xintercept = x_1C, linetype="dotted", color = "red", size=0.8)+
+            geom_text(aes(x=(x_1C-0.04), label="x1", y=5), colour="red") +
+            geom_vline(xintercept = x_2C, linetype="dotted", color = "red", size=0.8)+
+            geom_text(aes(x=(x_2C+0.03), label="x2", y=5), colour="red") +
+            theme_bw()+
+            xlim(0,0.5)+
+            ylim(0,10.5)+
+            labs(title = "Chris", x = "x", y = "Posterior")
+
+
+ggarrange(A_plot, B_plot, C_plot, ncol = 3, nrow = 1)
+```
+
+## Exercise 3
+
+A coin is flipped n = 30 times with the following outcomes:
+
+T, T, T, T, T, H, T, T, H, H, T, T, H, H, H, T, H, T, H, T, H, H, T, H, T, H, T, H, H, H
+
+1. Assuming a flat prior, and a beta prior, plot the likelihood, prior and posterior distributions for the data set.
+2. Evaluate the most probable value for the coin probability $p$ and, integrating the posterior probability distribution, give an estimate for a 95% credibility interval.
+3. Repeat the same analysis assuming a sequential analysis of the data. Show how the most probable value and the credibility interval change as a function of the number of coin tosses (i.e. from 1 to 30).
+4. Do you get a different result, by analyzing the data sequentially with respect to a one-step analysis (i.e. considering all the data as a whole) ?
+
+
+### Solution
+
+**1.** As in the previous case, also this time, we have a model with no parameters where 
+
+- the probability $p$ of getting head in one toss is constant
+- all tosses are independent
+
+thus the Likelyhood is again, a binomial distribution with $n = 30$ (number of tosses) and $r=15$ (number of heads):
+
+$$
+P(r|p,n,M) = {n\choose r} p^r(1-p)^{n-r} = {30\choose 15} p^{15}(1-p)^{15}
+$$
+
+We have also seen how to compute the Posterior and normalization factor with both a Uniform and a Beta prior. We repeat the same process choosing a Beta function with $\alpha = 10$ and $\beta = 10$.
+
+```{r}
+n <- 30  # Number of tosses
+r <- 15  # Number of heads obtained in the 30 tosses
+
+n.sample <- 3000
+delta.p <- 1/n.sample
+p <- seq(0, 1, length.out=n.sample) # Probability of getting head
+
+likelyhood <- dbinom(r, n, p)
+
+# Uniform prior
+prior_U <- dunif(p, 0, 1)
+pU.star <- dbinom(r, n, p)  # Un-normalized Posterior
+Z <- delta.p*sum(pU.star)   # Normalization factor
+posterior_U <- pU.star/Z    # Normalized
+
+
+# Beta prior
+alpha_p <- 10
+beta_p <- 10
+prior_B <- dbeta(p, alpha_p, beta_p)
+alpha <- alpha_p + r
+beta <- beta_p + n - r
+posterior_B <- dbeta(p, alpha, beta) # Already normalized
+
+df_priors <- data.frame(p=rep(p,2), 
+                        Pr=c(prior_U, prior_B), 
+                        Pri = c(rep("Uniform", length(p)), rep("Beta", length(p)))
+                        )
+
+df_likelyhoods <- data.frame(p=rep(p,2), 
+                      Li=rep(likelyhood, 2), 
+                      Lik = c(rep("Uniform", length(p)), rep("Beta", length(p)))
+                      )
+
+df_posteriors <- data.frame(p=rep(p,2), 
+                      Po=c(posterior_U, posterior_B), 
+                      Post = c(rep("Uniform", length(p)), rep("Beta", length(p)))
+                      )
+```
+
+```{r}
+# Plots
+options(repr.plot.width=8, repr.plot.height=3)
+
+# Anna
+Pri_plot <- ggplot(df_priors, aes(x=p, y=Pr, group=Pri)) +
+            geom_line(aes(color = Pri), size = 0.8) +
+            theme_bw()+
+            theme(legend.position = c(0.8, 0.95)) +
+            labs(title = "Prior distributions", x = "p", y = "P(p|M)", color = " ")
+
+# Benny
+Lik_plot <- ggplot(df_likelyhoods, aes(x=p, y=Li, group=Lik)) +
+            geom_line(aes(linetype=Lik, color=Lik, size = Lik)) +
+            scale_linetype_manual(values=c("dotted", "solid"))+
+            scale_size_manual(values=c(1.2, 0.5))+
+            theme_bw()+
+            theme(legend.position = c(0.8, 0.95)) +
+            labs(title = "Likelyhood", x = "p", y = "P(r|p,n,M)", color = " ", linetype = " ", size = " ")
+
+# Chris
+Pos_plot <- ggplot(df_posteriors, aes(x=p, y=Po, group=Post)) +
+            geom_line(aes(color = Post), size = 0.8) +
+            theme_bw()+
+            theme(legend.position = c(0.8, 0.95)) +
+            labs(title = "Posterior distributions", x = "p", y = "P(p|r,n,M)", color = " ")
+
+
+ggarrange(Pri_plot, Lik_plot, Pos_plot, ncol = 3, nrow = 1)
+
+```
+
+**2.** We compute the most probable value and estimate the value of the credibility interval as in the previous exercise.
+
+```{r}
+# Most probable values 
+max_U <- x[which.max(posterior_U)]
+max_B <- x[which.max(posterior_B)]
+
+# Confidence intervals
+cumsumU <- cumsum(posterior_U)/n.sample              
+x_1U <- x[cumsumU>=0.025][1]  # x1 is the first x for which the integral is > 0.025                                 
+x_2U <- x[cumsumU>=0.975][1]  # x2 is the first x for which the integral is > 0.975
+
+x_1B <- qbeta(0.025, alpha, beta)   
+x_2B <- qbeta(0.975, alpha, beta)
+
+print(paste("With Uniform Prior the most probable value is: ", max_U, "with a C.I [", x_1U, ",", x_2U, "]"))
+print(paste("With Beta Prior the most probable value is: ", max_B, "with a C.I [", x_1B, ",", x_2B, "]"))
+```
+
+```{r}
+# Plot with max and C.I.
+
+df_post2 <- data.frame(p=p, pU = posterior_U, pB = posterior_B)
+
+options(repr.plot.width=6, repr.plot.height=3)
+
+# Uniform Prior
+U_plot <- ggplot(df_post2) +
+            geom_line(aes(x=p, y= pU), color = "coral1", size = 1) +
+            geom_vline(xintercept = max_U, linetype="longdash", color = "black", size=0.5)+
+            geom_text(aes(x=(max_U+0.02), label="max", y=2), colour="black", angle=90) +
+            geom_vline(xintercept = x_1U, linetype="dotted", color = "red", size=0.8)+
+            geom_text(aes(x=(x_1U-0.04), label="x1", y=2), colour="red") +
+            geom_vline(xintercept = x_2U, linetype="dotted", color = "red", size=0.8)+
+            geom_text(aes(x=(x_2U+0.03), label="x2", y=2), colour="red") +
+            theme_bw()+
+            ylim(0,6)+
+            labs(title = "Uniform Prior", x = "p", y = "Posterior")
+
+# Beta Prior
+B_plot <- ggplot(df_post2) +
+            geom_line(aes(x=p, y= pB), color = "mediumaquamarine", size = 1) +
+            geom_vline(xintercept = max_B, linetype="longdash", color = "black", size=0.5)+
+            geom_text(aes(x=(max_B+0.02), label="max", y=2), colour="black", angle=90) +
+            geom_vline(xintercept = x_1B, linetype="dotted", color = "red", size=0.8)+
+            geom_text(aes(x=(x_1B-0.04), label="x1", y=2), colour="red") +
+            geom_vline(xintercept = x_2B, linetype="dotted", color = "red", size=0.8)+
+            geom_text(aes(x=(x_2B+0.03), label="x2", y=2), colour="red") +
+            theme_bw()+
+            ylim(0,6)+
+            labs(title = "Beta Prior", x = "p", y = "Posterior")
+
+ggarrange(U_plot, B_plot, ncol = 2, nrow = 1)
+```
+
+**3.** Now let's assume a sequential analysis of the data and evaluate the evolution of the most probable value and the credibility interval as a function of the number of coin tosses (i.e. from 1 to 30). In this process we can take the Posterior computed at the previous toss as Prior for the next iteration. 
+
+```{r}
+r <- 0  
+
+#Heads obtained in the 30 coin tosses (1 if H, 0 if T)
+heads <- c(0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1)
+
+
+# Starting with uniform Prior
+priorU <- dunif(p, 0, 1) 
+
+maxU <- rep(0,30)
+p_1U <- rep(0,30)
+p_2U <- rep(0,30)
+
+for(t in 1:length(heads)){
+    r <- heads[t]           # successes at that iteration
+    lik <- dbinom(r, 1, p)  # likelyhood
+    post_star <- lik*priorU # Un-normalized Posterior
+    postU <- post_star/(delta.p*sum(post_star))
+    
+    maxU[t] <- p[which.max(postU)]
+    cumsumU <- cumsum(postU)/n.sample
+
+    p_1U[t] <- p[cumsumU>=0.025][1]
+    p_2U[t] <- p[cumsumU>=0.975][1]
+
+    priorU <- postU # Posterior becomes new Prior
+}
+
+df_evol <- data.frame(t=1:30, max= maxU, x1=p_1U, x2=p_2U)
+
+df_evol
+```
+
+```{r}
+# Plot
+options(repr.plot.width=8, repr.plot.height=5)
+
+ggplot(df_evol, aes(x=t)) +
+            geom_ribbon(aes(ymax=x2, ymin=x1), fill="pink", alpha=.5)+
+            geom_line(aes(y = x1, color = "b"), linetype = "dotted", size = 0.8) +
+            geom_line(aes(y = x2, color = "c"), linetype = "dotted",  size = 0.8) +
+            geom_line(aes(y = max, color = "a"), linetype="dashed", size=1) +
+            geom_point(aes(y = max), color = "black", size=2.5)+
+            theme_bw(base_size=14)+
+            xlim(0,30)+
+            ylim(0,1)+
+            scale_colour_manual(labels =c("Max", "x1", "x2"),
+                                breaks = c("a","b", "c"),
+                                values = c("black","red","purple"))+
+            labs(title = "Evolution of max and 95% C.I.", x = "Tosses", y = "p" , color = " ")
+```
+
+<!-- #region -->
+We can see that, as the number of tosses increases, the most probable value of $p$, probability of getting head in one toss, becomes closer and closer to the expected value $0.5$ and the confidence interval becomes narrower.
+
+
+**4.** With this sequential analysis the value, after 30 tosses, of the most probable value and of the C.I. are:
+<!-- #endregion -->
+
+```{r}
+print(paste("The most probable value of the probability p is: ", df_evol$max[30]))
+print(paste("and the 95% confidence interval is: [", df_evol$x1[30],",",df_evol$x2[30],"]"))
+```
+
+Whereas, as we saw earlier:
+
+```{r}
+print(paste("With Uniform Prior the most probable value is: ", max_U, "with a C.I [", x_1U, ",", x_2U, "]"))
+print(paste("With Beta Prior the most probable value is: ", max_B, "with a C.I [", x_1B, ",", x_2B, "]"))
+```
+
+We can see that the results with the three methods are quite comparable, although with some differences which become less pronounced by increasing the number of tosses.
+
+```{r}
+
+```
